@@ -1,0 +1,109 @@
+saveDir = "D:/Organised_Butterfly_Dazzle_George/Collins_ButterflyScans/EMD_Reduced_Results.csv";
+
+Dialog.create("Elemental Motion Detector Settings");
+	Dialog.addString("Morphotype", "Butterfly",20);
+	Dialog.addString("Background", "BG",20);
+Dialog.show();
+
+T = Dialog.getString();
+bgLabel =  Dialog.getString();
+
+
+sT=split(T,"_");
+
+genus=sT[0];
+species=sT[1];
+genusSpecies=sT[0]+"_"+sT[1];
+sex =sT[2];
+
+print("-----------");
+print(genus);
+print(species);
+print(genusSpecies);
+print(sex);
+print(bgLabel);
+
+
+
+
+run("Remove Overlay");
+
+setBatchMode(true);
+
+
+run("Elemental Motion Detector2");
+
+lVals = newArray(nSlices);
+rVals = newArray(nSlices);
+uVals = newArray(nSlices);
+dVals = newArray(nSlices);
+udVals = newArray(nSlices);
+
+
+//--------------------Measure Motion Detector Profiles---------------------------
+
+selectImage("Left Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	//setResult("Label", row+i, rowLabel);
+	setSlice(i+1);
+	getStatistics(area, mean);
+	//setResult(colLabel+"_Left", row+i, mean);
+	lVals[i] = mean;
+}
+
+
+selectImage("Right Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	//setResult(colLabel+"_Right", row+i, mean);
+	rVals[i] = mean;
+}
+
+
+selectImage("Up Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	//setResult(colLabel+"_Up", row+i, mean);
+	uVals[i] = mean;
+}
+
+
+selectImage("Down Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	//setResult(colLabel+"_Down", row+i, mean);
+	dVals[i] = mean;
+	udVals[i] = (uVals[i] - dVals[i])/(uVals[i] + dVals[i]);
+	//setResult(colLabel+"_UpDownContrast", row+i, udVals[i] );
+}
+
+
+selectImage("Right Detectors");
+close();
+selectImage("Up Detectors");
+close();
+selectImage("Down Detectors");
+close();
+selectImage("Left Detectors");
+close();
+
+//updateResults();
+
+Array.getStatistics(rVals, rMin, rMax, rMean, rSD);
+Array.getStatistics(lVals, lMin, lMax, lMean, lSD);
+Array.getStatistics(uVals, uMin, uMax, uMean, uSD);
+Array.getStatistics(dVals, dMin, dMax, dMean, dSD);
+Array.getStatistics(udVals, udMin, udMax, udMean, udSD);
+
+
+resultsA = newArray(genus,species,genusSpecies,sex,bgLabel,lMean,lSD,rMean,rSD,uMean,uSD,dMean,dSD);
+resultsS=String.join(resultsA,",");
+File.append(resultsS,saveDir);
+

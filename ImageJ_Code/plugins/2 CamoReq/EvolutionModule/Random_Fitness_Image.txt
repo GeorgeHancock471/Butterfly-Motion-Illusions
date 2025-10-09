@@ -1,0 +1,45 @@
+gameDIR = getDirectory("Select folder you wish to use.");
+
+CheckDirectory=gameDIR;
+
+GeneratArray = newArray();
+
+GeneratList  =  getFileList(CheckDirectory);
+
+
+for(i=0; i<GeneratList.length; i++) { // list all .txt files
+
+	if(endsWith(GeneratList[i], "_ranks.txt")==1)
+
+		GeneratArray = Array.concat(GeneratArray, GeneratList[i]);
+}
+
+GenNumber=GeneratArray.length;
+
+fList = getFileList(CheckDirectory+"GenPat_"+GenNumber);
+
+
+printA=newArray(fList.length);
+printA[0] = "ID"+"\t"+"Fitness";
+
+tempDir = CheckDirectory +"gene_RememberFit.txt";	
+saveDir = CheckDirectory + "gen_" + GenNumber + "_ranks" + ".txt";
+
+
+for(i=0;i<fList.length;i++){
+
+name=replace(fList[i],".tif","");
+name=replace(name,".TIF","");
+name=replace(name,".PNG","");
+name=replace(name,".png","");
+
+printA[i] = name+"\t"+toString(random());
+File.append(printA[i],tempDir);
+}
+
+File.rename(tempDir,saveDir);
+
+
+
+
+

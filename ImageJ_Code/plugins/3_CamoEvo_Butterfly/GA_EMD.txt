@@ -1,0 +1,121 @@
+
+
+
+Dialog.create("Elemental Motion Detector Settings");
+
+	Dialog.addString("Label", "",20);
+	Dialog.addString("geneRemFileLoc", "",20);
+	Dialog.addNumber("Row", 0);
+
+Dialog.show();
+
+rowLabel = Dialog.getString();
+geneRemFileLoc =  Dialog.getString();
+row = Dialog.getNumber();
+
+
+run("Remove Overlay");
+
+setBatchMode(true);
+
+
+run("Elemental Motion Detector2");
+
+lVals = newArray(nSlices);
+rVals = newArray(nSlices);
+uVals = newArray(nSlices);
+dVals = newArray(nSlices);
+udVals = newArray(nSlices);
+
+
+//--------------------Measure Motion Detector Profiles---------------------------
+
+selectImage("Left Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setResult("Label", row+i, rowLabel);
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Left", row+i, mean);
+	lVals[i] = mean;
+}
+
+
+selectImage("Right Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Right", row+i, mean);
+	rVals[i] = mean;
+}
+
+
+selectImage("Up Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Up", row+i, mean);
+	uVals[i] = mean;
+}
+
+
+selectImage("Down Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Down", row+i, mean);
+	dVals[i] = mean;
+	udVals[i] = (uVals[i] - dVals[i])/(uVals[i] + dVals[i]);
+	setResult("UpDownContrast", row+i, udVals[i] );
+}
+
+
+selectImage("Right Detectors");
+close();
+selectImage("Up Detectors");
+close();
+selectImage("Down Detectors");
+close();
+selectImage("Left Detectors");
+close();
+
+updateResults();
+
+
+
+Array.getStatistics(rVals, rMin, rMax, rMean, rSD);
+Array.getStatistics(lVals, lMin, lMax, lMean, lSD);
+Array.getStatistics(uVals, uMin, uMax, uMean, uSD);
+Array.getStatistics(dVals, dMin, dMax, dMean, dSD);
+Array.getStatistics(udVals, udMin, udMax, udMean, udSD);
+
+
+print("[Summary Results]", rowLabel + "\t" + lMean + "\t" + lMin + "\t" + lMax + "\t" + lSD + "\t" + rMean + "\t" + rMin + "\t" + rMax + "\t" + rSD + "\t" + uMean + "\t" + uMin + "\t" + uMax + "\t" + uSD  + "\t" + dMean + "\t" + dMin + "\t" + dMax + "\t" + dSD  + "\t" + udMean);
+
+
+s = File.getParent(geneRemFileLoc);
+s = s+"/Settings_Fit_Measure.txt";
+s = File.openAsString(s);
+
+//Adjust Fitness Metrics
+//..................................
+if(startsWith(s,"ForwardConfusion")) fitness = (dMean-uMean) / ( dMean+uMean); // Fitness is the MC contrast of down to up.
+if(startsWith(s,"SideConfusion")) fitness = (lMean-uMean) / ( lMean+uMean); // Fitness is the MC contrast of left to up.
+if(startsWith(s,"UpEnergy")) fitness = uMean; // Fitness is the MC contrast of left to up.
+
+
+resultsA = newArray(rowLabel, fitness, lMean, rMean, uMean, dMean);
+resultsS = String.join(resultsA,"\t");
+
+
+
+File.append(resultsS, geneRemFileLoc); // <<<<<<< (more sideways is better)
+
+
+
+
+
+

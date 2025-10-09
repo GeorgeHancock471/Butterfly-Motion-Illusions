@@ -1,0 +1,619 @@
+/*
+
+Rendering is based on danaus free-flight take-off timing at 1000 fps
+Blender rending is up-sampled to 2000 fps in order to reduce motion blur
+
+two full wingbeats are modelled, each taking 78 frames (at 1000fps)
+
+Rendering is for the middle of this range, plus 10 frames at each end
+So rendering is from frame 29-127 (1000fps), 58-254 (2000fps)
+The analysis range shoudl therefore be 39-117 (1000fps)
+
+Next, the area of the wings is measured, and the wingbeat frequency
+estimated. The numbers above are then modified to slow or speed up
+the rendering FPS and measurement range.
+
+Render background set to average of bluetit sensitiivty, i.e. 76 out of 255.
+
+To add:
+	Scaling - to a uniform wing area
+
+
+*/
+
+
+
+//-------------------Variables--------------------
+dir = getDirectory("plugins") + "/Butterfly Dazzle/Temp/";
+bDir = "C:/Program Files/Blender Foundation/Blender 4.0/blender.exe"; //Blender directory
+iDir = "E:/Organised_Butterfly_Dazzle_George/Collins_ButterflyScans/processed/";
+saveDir = "E:/Organised_Butterfly_Dazzle_George/Collins_ButterflyScans/EMD_Reduced_Results.csv";
+
+
+
+bgDir=dir+"/Collins_Backgrounds/";
+bgList=getFileList(bgDir);
+
+tw = 1743; // wing image dimensions
+th = 2052;
+btw = 1000; // body target width
+
+sG = 2; // spatial Gaussian blur sigma (low pass only)
+tG = 5; // temporal blur
+
+pxmm = 23.583; // measured using the same scanner as the butterfly book
+origStartFrame = 29;
+origStopFrame = 127;
+origFrameMultiplier = 2;
+
+
+
+// Camera position
+posX = newArray(1);
+posY = newArray(1);
+posZ = newArray(1);
+posX[0] = 0;
+posY[0] = 6.44;
+posZ[0] = 34.43;
+
+rotX = newArray(1);
+rotY = newArray(1);
+rotZ = newArray(1);
+rotX[0] = 0;
+rotY[0] = 0;
+rotZ[0] = 0;
+
+posLabels = newArray(1);
+posLabels[0] = "dorsal";
+
+//----------------------------------------------------
+
+
+
+summaryTableExists = 0;
+morphoTableExists = 0;
+
+windowList = getList("window.titles");
+for(i=0; i<windowList.length; i++){
+	if(windowList[i] == "Summary Results")
+		summaryTableExists = 1;
+	if(windowList[i] == "Morpho Results")
+		morphoTableExists = 1;
+}
+
+if(summaryTableExists == 0){
+	run("New... ", "name=[Summary Results] type=Table");
+	print("[Summary Results]", "\\Headings:Label\tleft_mean\tleft_min\tleft_max\tleft_sd\tright_mean\tright_min\tright_max\tright_sd\tup_mean\tup_min\tup_max\tup_sd\tdown_mean\tdown_min\tdown_max\tdown_sd");
+}
+
+if(morphoTableExists == 0){
+	run("New... ", "name=[Morpho Results] type=Table");
+	print("[Morpho Results]", "\\Headings:Label\twingArea\tfreq");
+}
+
+
+
+setBatchMode(false); // TEST
+
+
+//setBatchMode(true);
+
+
+ts  =File.openDialog("Select butterfly .tif"); ;
+
+close("*");
+open(ts);
+
+imageName=getTitle();
+
+run("To ROI Manager");
+
+
+//-------------------Convert to cone-catch----------------
+// outputs bluetit linear double-cone cone catch instead of colour image
+oID = getImageID();
+run("Duplicate...", " ");
+
+
+
+
+//------------Rotate image-------------
+
+roiManager("Select", 2);
+getSelectionCoordinates(x, y);
+run("Select None");
+
+if(x[0] != x[1]){
+
+	w1 = getWidth();
+	h1 = getHeight();	
+
+	angle = 180/PI*((x[1]-x[0])/(y[1]-y[0]));
+	run("Rotate... ", "angle=&angle grid=1 interpolation=Bilinear enlarge");
+
+	w2 = getWidth();
+	h2 = getHeight();
+
+	roiManager("Select", 0);
+	run("Rotate...", "rotate angle=&angle");
+	roiManager("Add");
+	roiManager("Select", 3);
+	roiManager("translate", (w2-w1)/2, (h2-h1)/2);
+
+	roiManager("Select", 1);
+	run("Rotate...", "rotate angle=&angle");
+	roiManager("Add");
+	roiManager("Select", 4);
+	roiManager("translate", (w2-w1)/2, (h2-h1)/2);
+
+	roiManager("Select", 2);
+	run("Rotate...", "rotate angle=&angle");
+	roiManager("Add");
+	roiManager("Select", 5);
+	roiManager("translate", (w2-w1)/2, (h2-h1)/2);
+
+	run("Select None");
+	roiManager("Select", newArray(0,1,2));
+	roiManager("Delete");
+
+	roiManager("Deselect");
+	run("Select None");
+}
+
+
+//-----------select body--------
+
+// find right-most region of body
+roiManager("Select", 0);
+getSelectionBounds(fx, fy, fw, fh);
+getSelectionCoordinates(x, y);
+mx = x[x.length-1];
+if( x[x.length-2] > mx)
+	mx = x[x.length-2];
+
+roiManager("Select", 1);
+getSelectionBounds(hx, hy, hw, hh);
+getSelectionCoordinates(x, y);
+
+if( x[x.length-1] > mx)
+	mx = x[x.length-1];
+
+if( x[x.length-2] > mx)
+	mx = x[x.length-2];
+
+roiManager("Select", 2);
+getSelectionCoordinates(x, y);
+run("Line to Area");
+Roi.getBounds(xs,ys,w,h);
+
+
+run("Select All");
+run("Duplicate...", "title=body");
+roiManager("Select", 0);
+run("Enlarge...", "enlarge=5");
+run("Set...", "value=255 slice");
+roiManager("Select", 1);
+run("Enlarge...", "enlarge=5");
+run("Set...", "value=255 slice");
+
+run("Select None");
+run("Duplicate...", "title=mask");
+
+
+
+for(i=0;i<4;i++){
+makeRectangle(xs+i,ys,w,h);
+setForegroundColor(0, 0, 0);
+run("Fill", "slice");
+}
+
+
+
+roiManager("Select", 2);
+Roi.getBounds(lx,ly,lw,lh);
+
+roiManager("select",newArray(0,1));
+roiManager("OR");
+roiManager("Add");
+Roi.getBounds(wx,wy,ww,wh);
+
+roiManager("select",roiManager("count")-1); 
+Roi.move(wx-2,wy);
+run("Set...","value=0");
+run("Enlarge...", "enlarge=2");
+Roi.move(wx+1,wy);
+run("Set...","value=255");
+Roi.move(wx+1,wy+3);
+run("Set...","value=255");
+Roi.move(wx+1,wy-3);
+run("Set...","value=255");
+
+
+//makeRectangle(lx, ly-lh*0.8, lh/2, lh*1.82);
+//run("Make Inverse");
+//run("Set...","value=255");
+makeRectangle(x[0], fy, 5* (mx - x[0]), hy + hh - fy);
+
+
+
+run("Crop");
+
+run("8-bit");
+setThreshold(129,255);
+run("Create Selection");
+run("Set...","value=0");
+run("Make Inverse");
+run("Set...","value=255");
+run("Select None");
+
+
+
+run("Fill Holes");
+run("Create Selection");
+run("Enlarge...", "enlarge=2");
+run("Enlarge...", "enlarge=-2");
+
+run("Set...","value=255");
+run("Fill Holes");
+
+
+run("Analyze Particles...", "size=40-Infinity circularity=0.05-1.00 show=Masks include");
+
+
+
+setThreshold(255,255);
+
+run("Create Selection");
+roiManager("Add");
+
+
+
+close();
+close();
+
+makeRectangle(x[0], fy, 5* (mx - x[0]), hy + hh - fy);
+run("Crop");
+
+setPasteMode("Copy");
+
+roiManager("select",roiManager("count")-1);
+run("Max...","value=254");
+run("Make Inverse");
+run("Set...","value=255");
+roiManager("Delete");
+run("Select None");
+
+run("Select All");
+run("Copy");
+
+
+run("Flip Horizontally");
+
+
+
+bw = getWidth() * 2;
+bh = getHeight();
+
+run("Canvas Size...", "width=&bw height=&bh position=Center-Left zero");
+makeRectangle(bw/2, 0, bw/2, bh);
+run("Paste");
+run("Select None");
+
+
+tL=20;
+mtL=-tL;
+run("Translate...", "x=0 y=&mtL interpolation=None");
+makeRectangle(0,bh-tL,bw,tL);
+run("Set...","value=255");
+
+
+
+run("RGB Stack");
+setSlice(3);
+run("Select All");
+run("Copy");
+run("Add Slice");
+setSlice(4);
+setPasteMode("Copy");
+run("Paste");
+//run("Invert", "slice");
+setThreshold(255,255);
+run("Create Selection");
+run("Set...","value=0");
+run("Make Inverse");
+run("Set...","value=255");
+run("Select None");
+run("Minimum...", "radius=1 slice");
+setSlice(4);
+run("Set Label...", "label=Alpha");
+
+
+scale = th/bh;
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&btw height=&th position=Center zero");
+
+
+run("Min...","value=2");
+ts = dir + "body.png";
+saveAs("PNG", ts);
+close();
+close();
+
+
+//waitForUser("waiting - sort out body image width");
+
+run("Select None");
+
+//------------select wings-------
+
+roiManager("Select", newArray(0,1));
+roiManager("Combine");
+getStatistics(wingArea, mean);
+
+print("__________________________");
+wingArea = (wingArea*2) / pow(pxmm, 2); // times two for both wings!
+print("Wing area (mm^2) = " + wingArea);
+freq = pow( 10, (-0.134346*((log(wingArea)/log(10))*1.23952-7.843389 )+0.53418)       );
+print("Estimated wingbeat frequency (Hz) = " + freq);
+
+//print("[Morpho Results]", imageName+"\t"+ wingArea + "\t" + freq);
+
+
+
+startFrame = round(        origStartFrame * ((1000/freq)/78 ) * origFrameMultiplier   );
+stopFrame = round(        origStopFrame * ((1000/freq)/78 ) * origFrameMultiplier   );
+
+frameMultiplier = round(origFrameMultiplier*100*((1000/freq)/78));
+
+
+print("Start frame = " + startFrame);
+print("Stop frame = " + stopFrame);
+print("Speed multiplier, 100 frames = " + frameMultiplier);
+
+
+//waitForUser("waiting");
+
+//Custom Wing Rotate GH
+// rotate the wings 10 degrees.
+
+degR = 0;
+
+roiManager("Add");
+Roi.getBounds(xc,yc,wc,hc);
+run("Select None");
+
+
+run("Duplicate...", "title=mask");
+roiManager("select",roiManager("count")-1);
+run("Set...","value=255");
+run("Make Inverse");
+run("Set...","value=0");
+roiManager("select",roiManager("count")-1);
+run("Crop");
+setBackgroundColor(0, 0, 0);
+run("Rotate... ", "angle=&degR grid=1 interpolation=None fill enlarge");
+run("32-bit");
+setThreshold(255,255);
+run("Create Selection");
+Roi.getBounds(cropX,cropY,cropW,cropH);
+run("Crop");
+roiManager("Add");
+close();
+
+roiManager("select",roiManager("count")-2);
+Roi.move(xc,yc);
+run("Crop");
+
+setBackgroundColor(255, 255, 255);
+run("Rotate... ", "angle=&degR grid=1 interpolation=None fill enlarge");
+makeRectangle(cropX,cropY,cropW,cropH);
+run("Crop");
+run("RGB Stack");
+
+
+setSlice(3);
+setBackgroundColor(0, 0, 0);
+run("Add Slice");
+setSlice(4);
+run("Set Label...", "label=Alpha");
+roiManager("select",roiManager("count")-1);
+run("Set...", "value=255 slice");
+run("Minimum...", "radius=2 slice");
+
+w = getWidth();
+h = getHeight();
+
+
+
+
+scale = th/h;
+
+if(tw/w < th/h)
+	scale = tw/w;
+
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&tw height=&th position=Center-Left zero");
+run("Flip Horizontally", "stack");
+
+
+
+//waitForUser("waiting");
+
+run("Min...","value=2");
+ts = dir + "wing.png";
+saveAs("PNG", ts);
+close();
+
+
+
+/*
+//--------------------create average grey wing--------------
+
+setSlice(1);
+getStatistics(area, rmean);
+setSlice(2);
+getStatistics(area, gmean);
+setSlice(3);
+getStatistics(area, bmean);
+
+run("Select All");
+
+setSlice(1);
+run("Set...", "value=&rmean slice");
+setSlice(2);
+run("Set...", "value=&gmean slice");
+setSlice(3);
+run("Set...", "value=&bmean slice");
+
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&tw height=&th position=Center-Left zero");
+run("Flip Horizontally", "stack");
+
+ts = dir + "gwing.png";
+saveAs("PNG", ts);
+close();
+
+
+close();
+*/
+
+row = nResults();
+
+
+
+
+exit
+//-----------------RENDER ORIGINAL----------------------
+
+// Create camera positions
+
+for(j=0; j<1; j++){ // modified to only do one camera position
+ts = dir + "butterflyRender.txt";
+dataFile = File.open(ts);
+
+print(dataFile, "import bpy");
+
+print(dataFile, "bpy.data.objects['Camera'].location = (" + posX[j] + "," + posY[j] + "," + posZ[j] + ");");
+print(dataFile, "bpy.data.objects['Camera'].rotation_euler = (" + rotX[j] + "," + rotY[j] + "," + rotZ[j] + ");");
+print(dataFile, "bpy.context.scene.render.frame_map_new = "+ frameMultiplier + ";");
+print(dataFile, "bpy.context.scene.frame_start = " + startFrame + ";");
+print(dataFile, "bpy.context.scene.frame_end = " + stopFrame + ";");
+
+print(dataFile, "# Paths");
+print(dataFile, 'blend_file_path = "E:/Organised_Butterfly_Dazzle_George/BUTTER~1/plugins/Butterfly Dazzle/Temp/ButterflyRendering_Blank.blend"'+";");
+print(dataFile, 'output_path = "E:/Organised_Butterfly_Dazzle_George/BUTTER~1/plugins/Butterfly Dazzle/Temp/render/"'+";");
+
+print(dataFile, "# Load the new .blend file");
+print(dataFile, "bpy.ops.wm.open_mainfile(filepath=blend_file_path)");
+
+print(dataFile, "# Set the active view to the camera called 'DorsalCamera'");
+print(dataFile, "camera_name = 'Camera'");
+print(dataFile, "camera = bpy.data.cameras.get(camera_name)");
+
+print(dataFile, "# Set the output file path for rendering the animation");
+print(dataFile, "bpy.context.scene.render.filepath = output_path");
+
+print(dataFile, "# Render the animation directly to the specified output path");
+print(dataFile, "bpy.ops.render.render(animation=True, use_viewport=True)");
+
+print(dataFile, "bpy.ops.wm.quit_blender()");
+
+
+File.close(dataFile);
+
+tsPy = dir + "butterflyRender.py";
+if(File.delete(tsPy) == 0)
+	print("error deleting file: " + tsPy);
+if(File.rename(ts, tsPy) == 0)
+	print("error renaming file: " + tsPy);
+
+
+rDir = dir + "render/";
+rList = getFileList(rDir);
+
+for(i=0; i<rList.length; i++){
+	ts = rDir + rList[i];
+	if(File.delete(ts) == 0)
+		print("error deleting file: " + ts);
+}
+
+
+ts = dir + "ButterflyRendering_GH.blend";      //////// <----------------------------------- change to treatment
+
+exec(bDir, "-b", ts, "-P", tsPy, "-a");
+
+
+run("Image Sequence...", "open=&rDir sort");
+setBatchMode("Exit and Display");
+
+
+
+
+rename("WingBeat_Sequence");
+run("Select None");
+
+// Create Wing Mask
+run("Duplicate...", "title=WingBeat_Mask duplicate");
+run("32-bit");
+for(i=0;i<nSlices;i++){
+setSlice(i+1);
+setThreshold(0,2);
+run("Create Selection");
+run("Set...","value=1");
+run("Make Inverse");
+run("Set...","value=0");
+}
+run("Select None");
+resetThreshold;
+run("Enhance Contrast...", "saturated=0.35");
+
+for(b=0;b<bgList.length;b++){
+
+
+open(bgDir+bgList[b]);
+run("Copy"); setPasteMode("Multiply");
+close();
+selectImage("WingBeat_Mask");
+run("Duplicate...", "title=Background_Stack duplicate");
+for(i=0;i<nSlices;i++){
+setSlice(i+1);
+run("Paste");
+}
+
+exit
+
+imageCalculator("Add stack", "Background_Stack","WingBeat_Sequence");
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+ts = "label=[" + imageName + "] column=orig_" + posLabels[j] + " row=" + row;     //////// <----------------------------------- change to treatment
+
+
+run("Run Elemental Detector Collins", "morphotype="+butterflyList[k]+" background="+bgList[b]);
+
+
+}
+
+
+
+run("Close All");
+}// j camera loop
+
+
+
+}//k
+
+
+
+

@@ -1,0 +1,14 @@
+bg =File.openDialog("Select a background"); 
+
+open(bg);
+run("Copy"); setPasteMode("Multiply");
+close();
+selectImage("WingBeat_Mask");
+run("Duplicate...", "title=Background_Stack duplicate");
+for(i=0;i<nSlices;i++){
+setSlice(i+1);
+run("Paste");
+}
+
+imageCalculator("Add stack", "Background_Stack","WingBeat_Sequence");
+rename("Combined_BG");

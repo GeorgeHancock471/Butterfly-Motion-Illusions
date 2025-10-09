@@ -1,0 +1,108 @@
+//...............................................................
+//...............................................................
+//Frame Interp No Colour
+//...............................................................
+//...............................................................
+
+T = getTitle();
+
+Dialog.create("Settings");
+Dialog.addNumber("Wing beat frq (Hz)", 9);
+Dialog.addNumber("CFF", 60);
+Dialog.addNumber("FramesPerCycle", 165);
+Dialog.show();
+
+WBF=Dialog.getNumber();
+displayF = Dialog.getNumber();
+FramesPerCycle = Dialog.getNumber();
+
+img=getTitle();
+
+if(isOpen("NewVideo")) close("NewVideo");
+
+oF = FramesPerCycle;
+actualF =oF*WBF;
+
+rV= actualF/displayF;
+
+print(rV);
+
+w=getWidth();
+h=getHeight();
+
+print(nSlices);
+oldS=nSlices;
+newS = Math.ceil(nSlices/rV);
+
+
+
+//Make Stack
+//...................................................................
+setBatchMode(true);
+
+newImage("NewVideo", "RGB black", w, h, newS);
+
+
+for(j=0;j<newS;j++){
+
+	for(i=0;i<Math.ceil(rV);i++){
+	selectImage(img);
+
+	ft=(j/newS * oldS)+i+1;
+
+	while(ft>oldS){
+	ft=ft-oldS;
+	}
+	print(ft);
+	setSlice(Math.ceil(ft));
+	nm="T"+i;
+	run("Duplicate...", "title=&nm");
+
+	run("RGB Stack");
+	run("32-bit");
+
+	if(i==Math.ceil(rV)-1 && rV!=parseInt(rV)){
+	dv=rV-floor(rV);
+	run("Multiply...","value=dv stack");
+	}
+
+	run("Divide...","value=rV stack");
+	}
+	
+	for(i=0;i<Math.ceil(rV)-1;i++){
+
+	nm1="T"+i;
+	nm2="T"+i+1;
+
+		for(x=0;x<3;x++){
+			selectImage(nm1);
+			setSlice(x+1);
+			run("Copy"); setPasteMode("Add");
+			selectImage(nm2);
+			setSlice(x+1);
+			run("Paste");
+		}
+	close(nm1);
+	}
+	
+	run("8-bit");
+	run("RGB Color");
+	run("Copy"); setPasteMode("Copy");
+	close();
+	selectImage("NewVideo");
+	setSlice(j+1);
+	run("Paste");
+
+
+}
+	
+setBatchMode("show");
+setBatchMode(false);
+run("Set Min And Max", "min=0 max=255");
+
+
+rename(replace(T,".avi","")+"_CFF_"+displayF+"_wbf_"+WBF);
+
+
+
+

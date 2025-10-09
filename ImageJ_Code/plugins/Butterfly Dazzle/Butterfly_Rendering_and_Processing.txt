@@ -1,0 +1,530 @@
+/*
+
+Rendering is based on danaus free-flight take-off timing at 1000 fps
+Blender rending is up-sampled to 2000 fps in order to reduce motion blur
+
+two full wingbeats are modelled, each taking 78 frames (at 1000fps)
+
+Rendering is for the middle of this range, plus 10 frames at each end
+So rendering is from frame 29-127 (1000fps), 58-254 (2000fps)
+The analysis range shoudl therefore be 39-117 (1000fps)
+
+Next, the area of the wings is measured, and the wingbeat frequency
+estimated. The numbers above are then modified to slow or speed up
+the rendering FPS and measurement range.
+
+*/
+
+
+
+//-------------------Variables--------------------
+dir = "/home/jolyon/TEMP/ButterflyDazzle/";
+bDir = "/home/jolyon/Documents/Software/blender-2.81-linux-glibc217-x86_64/blender";
+iDir = "/home/jolyon/Desktop/Butterfly Wings/Collins_ButterflyScans/Processed Butterflies/";
+
+tw = 1743; // wing image dimensions
+th = 2052;
+btw = 1000; // body target width
+
+sG = 2; // spatial Gaussian blur sigma (low pass only)
+tG = 5; // temporal blur
+
+pxmm = 23; // approximately 200mm = 4600px = 23px/mm
+origStartFrame = 29;
+origStopFrame = 127;
+origFrameMultiplier = 2;
+
+// Camera position
+posX = newArray(0, 0, 9.11, 9.11);
+posY = newArray(6.44, -14, 6.44, -14);
+posZ = newArray(34.43, 34.43, 34.43, 34.43);
+
+rotX = newArray(0, 0.523599, 0, 0.523599);
+rotY = newArray(0, 0, 0.261799, 0.261799, 0);
+rotZ = newArray(0, 0, 0, 0);
+
+posLabels = newArray("x0y0", "x30y0", "x0y15", "x30y15");
+
+//----------------------------------------------------
+
+setBatchMode(true);
+
+butterflyList = getFileList(iDir);
+
+for(k=0; k<butterflyList.length; k++){
+
+ts = iDir + butterflyList[k];
+open(ts);
+
+//imageName = getTitle();
+imageName = butterflyList[k];
+imagename = replace(imageName, ".tif", "");
+
+
+run("To ROI Manager");
+
+//------------Rotate image-------------
+
+roiManager("Select", 2);
+getSelectionCoordinates(x, y);
+run("Select None");
+
+if(x[0] != x[1]){
+
+	w1 = getWidth();
+	h1 = getHeight();	
+
+
+	angle = 180/PI*((x[1]-x[0])/(y[1]-y[0]));
+	run("Rotate... ", "angle=&angle grid=1 interpolation=Bilinear enlarge");
+
+	w2 = getWidth();
+	h2 = getHeight();
+
+	roiManager("Select", 0);
+	run("Rotate...", "rotate angle=&angle");
+	roiManager("Add");
+	roiManager("Select", 3);
+	roiManager("translate", (w2-w1)/2, (h2-h1)/2);
+
+	roiManager("Select", 1);
+	run("Rotate...", "rotate angle=&angle");
+	roiManager("Add");
+	roiManager("Select", 4);
+	roiManager("translate", (w2-w1)/2, (h2-h1)/2);
+
+	roiManager("Select", 2);
+	run("Rotate...", "rotate angle=&angle");
+	roiManager("Add");
+	roiManager("Select", 5);
+	roiManager("translate", (w2-w1)/2, (h2-h1)/2);
+
+	run("Select None");
+	roiManager("Select", newArray(0,1,2));
+	roiManager("Delete");
+
+	roiManager("Deselect");
+	run("Select None");
+}
+
+
+//-----------select body--------
+
+// find right-most region of body
+roiManager("Select", 0);
+getSelectionBounds(fx, fy, fw, fh);
+getSelectionCoordinates(x, y);
+mx = x[x.length-1];
+if( x[x.length-2] > mx)
+	mx = x[x.length-2];
+
+roiManager("Select", 1);
+getSelectionBounds(hx, hy, hw, hh);
+getSelectionCoordinates(x, y);
+
+if( x[x.length-1] > mx)
+	mx = x[x.length-1];
+
+if( x[x.length-2] > mx)
+	mx = x[x.length-2];
+
+roiManager("Select", 2);
+getSelectionCoordinates(x, y);
+
+run("Select All");
+run("Duplicate...", "body");
+roiManager("Select", 0);
+run("Set...", "value=255 slice");
+roiManager("Select", 1);
+run("Set...", "value=255 slice");
+
+makeRectangle(x[0], fy, 5* (mx - x[0]), hy + hh - fy);
+run("Crop");
+
+run("Select All");
+run("Copy");
+run("Flip Horizontally");
+
+
+bw = getWidth() * 2;
+bh = getHeight();
+
+run("Canvas Size...", "width=&bw height=&bh position=Center-Left zero");
+makeRectangle(bw/2, 0, bw/2, bh);
+run("Paste");
+run("Select None");
+
+run("RGB Stack");
+setSlice(3);
+run("Select All");
+run("Copy");
+run("Add Slice");
+setSlice(4);
+run("Paste");
+run("Invert", "slice");
+setMinAndMax(0, 40);
+run("Apply LUT", "slice");
+run("Minimum...", "radius=2 slice");
+
+run("Set Label...", "label=Alpha");
+
+
+scale = th/bh;
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&btw height=&th position=Center zero");
+
+ts = dir + "body.png";
+saveAs("PNG", ts);
+close();
+close();
+
+
+
+//waitForUser("waiting - sort out body image width");
+
+run("Select None");
+
+//------------select wings-------
+
+roiManager("Select", newArray(0,1));
+roiManager("Combine");
+getStatistics(wingArea, mean);
+
+print("__________________________");
+wingArea = wingArea / pow(pxmm, 2);
+print("Wing area (mm^2) = " + wingArea);
+freq = pow( 10, (-0.134346*((log(wingArea)/log(10))*1.23952-6.61419 )+0.53418)       );
+print("Estimated wingbeat frequency (Hz) = " + freq);
+
+
+startFrame = round(        origStartFrame * ((1000/freq)/78 ) * origFrameMultiplier   );
+stopFrame = round(        origStopFrame * ((1000/freq)/78 ) * origFrameMultiplier   );
+
+frameMultiplier = round(origFrameMultiplier*100*((1000/freq)/78));
+
+
+print("Start frame = " + startFrame);
+print("Stop frame = " + stopFrame);
+print("Speed multiplier, 100 frames = " + frameMultiplier);
+
+
+//waitForUser("waiting");
+
+run("Crop");
+roiManager("Add");
+
+run("RGB Stack");
+
+setSlice(3);
+setBackgroundColor(0, 0, 0);
+run("Add Slice");
+setSlice(4);
+run("Set Label...", "label=Alpha");
+run("Set...", "value=255 slice");
+run("Minimum...", "radius=2 slice");
+
+w = getWidth();
+h = getHeight();
+
+
+
+scale = th/h;
+
+if(tw/w < th/h)
+	scale = tw/w;
+
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&tw height=&th position=Center-Left zero");
+run("Flip Horizontally", "stack");
+
+//waitForUser("waiting");
+
+
+ts = dir + "wing.png";
+saveAs("PNG", ts);
+close();
+
+//--------------------create average grey wing--------------
+
+setSlice(1);
+getStatistics(area, rmean);
+setSlice(2);
+getStatistics(area, gmean);
+setSlice(3);
+getStatistics(area, bmean);
+
+run("Select All");
+
+setSlice(1);
+run("Set...", "value=&rmean slice");
+setSlice(2);
+run("Set...", "value=&gmean slice");
+setSlice(3);
+run("Set...", "value=&bmean slice");
+
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&tw height=&th position=Center-Left zero");
+run("Flip Horizontally", "stack");
+
+ts = dir + "gwing.png";
+saveAs("PNG", ts);
+close();
+
+
+close();
+
+
+row = nResults();
+
+
+//-----------------RENDER ORIGINAL----------------------
+
+// Create camera positions
+
+for(j=0; j<posX.length; j++){
+ts = dir + "butterflyRender.txt";
+dataFile = File.open(ts);
+
+	print(dataFile, "import bpy;");
+	print(dataFile, "bpy.data.objects['Camera'].location = (" + posX[j] + "," + posY[j] + "," + posZ[j] + ");");
+	print(dataFile, "bpy.data.objects['Camera'].rotation_euler = (" + rotX[j] + "," + rotY[j] + "," + rotZ[j] + ");");
+	print(dataFile, "bpy.context.scene.render.frame_map_new = "+ frameMultiplier + ";");
+	print(dataFile, "bpy.context.scene.frame_start = " + startFrame + ";");
+	print(dataFile, "bpy.context.scene.frame_end = " + stopFrame + ";");
+
+File.close(dataFile);
+
+tsPy = dir + "butterflyRender.py";
+if(File.delete(tsPy) == 0)
+	print("error deleting file: " + tsPy);
+if(File.rename(ts, tsPy) == 0)
+	print("error renaming file: " + tsPy);
+
+
+rDir = dir + "render/";
+rList = getFileList(rDir);
+
+for(i=0; i<rList.length; i++){
+	ts = rDir + rList[i];
+	if(File.delete(ts) == 0)
+		print("error deleting file: " + ts);
+}
+
+
+ts = dir + "ButterflyRendering.blend";      //////// <----------------------------------- change to treatment
+
+exec(bDir, "-b", ts, "-P", tsPy, "-a");
+
+
+run("Image Sequence...", "open=&rDir sort");
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+ts = "label=[" + imageName + "] column=orig_" + posLabels[j] + " row=" + row;     //////// <----------------------------------- change to treatment
+run("Run Elemental Motion Detector  Butterflies", ts);
+
+run("Close All");
+}// j camera loop
+
+
+//-----------------RENDER GREY----------------------
+
+// Create camera positions
+
+for(j=0; j<posX.length; j++){
+ts = dir + "butterflyRender.txt";
+dataFile = File.open(ts);
+
+	print(dataFile, "import bpy;");
+	print(dataFile, "bpy.data.objects['Camera'].location = (" + posX[j] + "," + posY[j] + "," + posZ[j] + ");");
+	print(dataFile, "bpy.data.objects['Camera'].rotation_euler = (" + rotX[j] + "," + rotY[j] + "," + rotZ[j] + ");");
+	print(dataFile, "bpy.context.scene.render.frame_map_new = "+ frameMultiplier + ";");
+	print(dataFile, "bpy.context.scene.frame_start = " + startFrame + ";");
+	print(dataFile, "bpy.context.scene.frame_end = " + stopFrame + ";");
+
+File.close(dataFile);
+
+tsPy = dir + "butterflyRender.py";
+if(File.delete(tsPy) == 0)
+	print("error deleting file: " + tsPy);
+if(File.rename(ts, tsPy) == 0)
+	print("error renaming file: " + tsPy);
+
+
+rDir = dir + "render/";
+rList = getFileList(rDir);
+
+for(i=0; i<rList.length; i++){
+	ts = rDir + rList[i];
+	if(File.delete(ts) == 0)
+		print("error deleting file: " + ts);
+}
+
+
+ts = dir + "ButterflyRendering_grey.blend";      //////// <----------------------------------- change to treatment
+
+exec(bDir, "-b", ts, "-P", tsPy, "-a");
+
+
+run("Image Sequence...", "open=&rDir sort");
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+ts = "label=[" + imageName + "] column=grey_" + posLabels[j] + " row=" + row;     //////// <----------------------------------- change to treatment
+run("Run Elemental Motion Detector  Butterflies", ts);
+
+run("Close All");
+}// j camera loop
+
+
+
+//-----------------RENDER GLIDE----------------------
+
+// Create camera positions
+
+for(j=0; j<posX.length; j++){
+ts = dir + "butterflyRender.txt";
+dataFile = File.open(ts);
+
+	print(dataFile, "import bpy;");
+	print(dataFile, "bpy.data.objects['Camera'].location = (" + posX[j] + "," + posY[j] + "," + posZ[j] + ");");
+	print(dataFile, "bpy.data.objects['Camera'].rotation_euler = (" + rotX[j] + "," + rotY[j] + "," + rotZ[j] + ");");
+	print(dataFile, "bpy.context.scene.render.frame_map_new = "+ frameMultiplier + ";");
+	print(dataFile, "bpy.context.scene.frame_start = " + startFrame + ";");
+	print(dataFile, "bpy.context.scene.frame_end = " + stopFrame + ";");
+
+File.close(dataFile);
+
+tsPy = dir + "butterflyRender.py";
+if(File.delete(tsPy) == 0)
+	print("error deleting file: " + tsPy);
+if(File.rename(ts, tsPy) == 0)
+	print("error renaming file: " + tsPy);
+
+
+rDir = dir + "render/";
+rList = getFileList(rDir);
+
+for(i=0; i<rList.length; i++){
+	ts = rDir + rList[i];
+	if(File.delete(ts) == 0)
+		print("error deleting file: " + ts);
+}
+
+
+ts = dir + "ButterflyRendering_glide.blend";      //////// <----------------------------------- change to treatment
+
+exec(bDir, "-b", ts, "-P", tsPy, "-a");
+
+
+run("Image Sequence...", "open=&rDir sort");
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+ts = "label=[" + imageName + "] column=glide_" + posLabels[j] + " row=" + row;     //////// <----------------------------------- change to treatment
+run("Run Elemental Motion Detector  Butterflies", ts);
+
+run("Close All");
+}// j camera loop
+
+
+
+//-----------------RENDER GREY GLIDE----------------------
+
+// Create camera positions
+
+for(j=0; j<posX.length; j++){
+ts = dir + "butterflyRender.txt";
+dataFile = File.open(ts);
+
+	print(dataFile, "import bpy;");
+	print(dataFile, "bpy.data.objects['Camera'].location = (" + posX[j] + "," + posY[j] + "," + posZ[j] + ");");
+	print(dataFile, "bpy.data.objects['Camera'].rotation_euler = (" + rotX[j] + "," + rotY[j] + "," + rotZ[j] + ");");
+	print(dataFile, "bpy.context.scene.render.frame_map_new = "+ frameMultiplier + ";");
+	print(dataFile, "bpy.context.scene.frame_start = " + startFrame + ";");
+	print(dataFile, "bpy.context.scene.frame_end = " + stopFrame + ";");
+
+File.close(dataFile);
+
+tsPy = dir + "butterflyRender.py";
+if(File.delete(tsPy) == 0)
+	print("error deleting file: " + tsPy);
+if(File.rename(ts, tsPy) == 0)
+	print("error renaming file: " + tsPy);
+
+
+rDir = dir + "render/";
+rList = getFileList(rDir);
+
+for(i=0; i<rList.length; i++){
+	ts = rDir + rList[i];
+	if(File.delete(ts) == 0)
+		print("error deleting file: " + ts);
+}
+
+
+ts = dir + "ButterflyRendering_grey_glide.blend";      //////// <----------------------------------- change to treatment
+
+exec(bDir, "-b", ts, "-P", tsPy, "-a");
+
+
+run("Image Sequence...", "open=&rDir sort");
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+ts = "label=[" + imageName + "] column=greyglide_" + posLabels[j] + " row=" + row;     //////// <----------------------------------- change to treatment
+run("Run Elemental Motion Detector  Butterflies", ts);
+
+run("Close All");
+}// j camera loop
+
+
+}//k
+
+
+
+

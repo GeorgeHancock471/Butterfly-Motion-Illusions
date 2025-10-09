@@ -1,0 +1,16 @@
+Visible
+Same photo
+0
+59.4, 3.219
+0
+0
+0
+None
+16
+1
+0.005
+1
+Custom Non-linear
+Linear Normalised Reflectance Stack
+scanner
+0

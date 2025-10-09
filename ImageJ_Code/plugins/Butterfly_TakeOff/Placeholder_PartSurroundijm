@@ -1,0 +1,56 @@
+run("32-bit");
+setTool("rectangle");
+waitForUser("get background colour");
+MV=getValue("Mean");
+
+run("Threshold...");
+waitForUser("adjust threshold");
+
+// Get current threshold values
+getThreshold(lower, upper);
+run("Select None");
+for(i=0;i<nSlices;i++){
+while(roiManager("count")>0){
+roiManager("select",Array.getSequence(roiManager("count")));
+roiManager("delete");
+}
+setSlice(i+1);
+setThreshold(lower,upper);
+run("Create Selection");
+if(selectionType!=-1){
+roiManager("Add");
+print(1);
+if(selectionType==9){
+roiManager("split");
+}
+print(2);
+roiManager("select",0); roiManager("delete");
+run("Select None");
+setThreshold(MV,MV);
+run("Create Selection");
+run("Make Inverse");
+roiManager("Add");
+nC=roiManager("count");
+roiManager("select",nC-1);
+roiManager("rename","butterfly");
+
+
+
+for(j=0;j<nC-1;j++){
+roiManager("select",j);
+run("Make Band...", "band=3");
+roiManager("Add");
+roiManager("select",newArray(roiManager("count")-1,nC-1));
+roiManager("AND");
+roiManager("Add");
+roiManager("select",roiManager("count")-1);
+mode=getValue("Mode");
+roiManager("select",j);
+run("Set...","value=mode");
+}
+
+}
+}
+run("Select None");
+resetThreshold;
+run("Median...", "radius=1.5 stack");

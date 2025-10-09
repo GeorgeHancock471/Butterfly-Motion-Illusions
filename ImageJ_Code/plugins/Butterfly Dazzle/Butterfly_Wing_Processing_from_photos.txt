@@ -1,0 +1,412 @@
+/*
+
+
+PLAN:
+
+-Select image
+-input information
+	-species
+	-genus
+	-family
+	-scan resolution (px/mm)
+-draw box around butterfly
+-if not straight draw line from head to tail (used for angle & rotation)
+-draw line from intersection of forewing and hindwing at body and at edge of wings
+-draw polyline to seprate forewing and hindwing
+-use thresholding to select outline ROI & make backgournd black (zero pixel values - ignored by toolbox)
+
+
+
+*/
+
+
+h = getHeight();
+w = getWidth();
+
+//saveDir = getInfo("image.directory");
+
+saveDir = "/home/jolyon/Desktop/Butterfly Wings/WebPhotos/";
+
+rename("butterfly");
+
+run("Select None");
+
+
+setTool("line");
+waitForUser("Draw a line along the scale bar or from body centre to wingtip");
+getSelectionCoordinates(xScale, yScale);
+
+
+Dialog.create("Scale Info");
+
+	Dialog.addNumber("Length of scale bar (mm)", 0.0);
+	Dialog.addMessage("e.g. wingspan, forewing length or scale bar");
+
+Dialog.show();
+
+
+pxmm = Dialog.getNumber();
+
+scaleLength = pow(pow(xScale[0]-xScale[1],2) + pow(yScale[0]-yScale[1],2), 0.5); // Euclidean distance
+
+pxmm = scaleLength/pxmm;
+print("Pixlels per mm: " + pxmm);
+run("Select None");
+
+
+setTool("line");
+waitForUser("Draw a line from head to tail");
+
+
+
+getSelectionCoordinates(xHeadTail, yHeadTail);
+
+
+run("Select None");
+f = 0;
+while(f == 0){
+
+waitForUser("Draw a line from the base of the forewing to the base of the hindwing");
+	if(selectionType == 5){
+		getSelectionCoordinates(xBase, yBase);
+		f = 1;
+	}
+}
+
+setTool("polyline");
+run("Select None");
+f = 0;
+while(f == 0){
+
+waitForUser("Draw a polyline between the right-hand forewing and hindwing");
+	if(selectionType == 5 || selectionType == 6 || selectionType == 7){
+		getSelectionCoordinates(xWing, yWing);
+		f = 1;
+	}
+}
+
+run("Select All");
+//run("Copy");
+run("Duplicate...", "title=mask");
+
+run("32-bit");
+run("Add Image...", "image=butterfly x=0 y=0 opacity=80");
+
+setThreshold(0.0, 220);
+setForegroundColor(0,0,0);
+//setForegroundColor(255,255,255);
+setBackgroundColor(255,255,255);
+run("Threshold...");
+setTool("Paintbrush Tool");
+
+waitForUser("Select suitable threshold to remove background, and use the brush to create an intact edge");
+
+getThreshold(lower, upper);
+setThreshold(0.0, upper);
+
+
+run("Convert to Mask");
+run("Invert");
+run("Remove Overlay");
+
+setTool("Wand");
+
+f = 0;
+while(f == 0){
+waitForUser("Select the butterfly using the wand");
+	if(selectionType == 2 || selectionType ==  3  || selectionType ==  4){
+		getSelectionCoordinates(xOut, yOut);
+		f = 1;
+	}
+}
+
+selectImage("mask");
+close();
+selectImage("butterfly");
+
+// Rearrange selections to correct order (top to bottom, left to right)
+if(xWing[0] < xWing[xWing.length-1]){
+	xWing = Array.reverse(xWing);
+	yWing = Array.reverse(yWing);
+}
+
+
+if(yBase[0] > yBase[1]){
+	xBase = Array.reverse(xBase);
+	yBase = Array.reverse(yBase);
+}
+
+
+//------------------------Create wing selections-------------------------------
+
+
+// Find permimeter point nearest the forewing base
+minD = 10E10;
+fbLoc = 0; // forewing-base
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(xBase[0] - xOut[i], 2) + pow(yBase[0] - yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		fbLoc = i; // forewing-base
+	}
+}
+
+
+// Find permimeter point nearest the forewing-hindwing intersection
+minD = 10E10;
+fhLoc = 0;
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(xWing[0] - xOut[i], 2) + pow(yWing[0] - yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		fhLoc = i; // forewing-hindwing
+	}
+}
+
+// Find permimeter point nearest top-right of image
+minD = 10E10;
+tlLoc = 0;
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(w-xOut[i], 2) + pow(yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		tlLoc = i; // forewing-hindwing
+	}
+}
+
+
+
+xFw = newArray(xOut.length);
+yFw = newArray(yOut.length);
+
+
+f = 0;
+for(i=0; i<xOut.length; i++){
+	t = i + fbLoc;
+	while(t > xOut.length-1)
+		t-=xOut.length;
+
+	if(t == tlLoc)
+		f = 1; // this flag goes to 1 if the permimeter passes trhough the top left wingtip
+
+	if(t == fhLoc){
+		endi = i;
+		i = xOut.length;
+	} else {
+		xFw[i] = xOut[t];
+		yFw[i] = yOut[t];
+	}
+}
+
+
+if(f == 0){ // perimeter was in the wrong direction - repeat
+
+	//makeSelection("freeline", xFw, yFw);
+	//waitForUser("wrong direction");
+
+	xFw = newArray(xOut.length);
+	yFw = newArray(yOut.length);
+
+
+	for(i=0; i<xOut.length; i++){
+		t = fbLoc - i;
+		while(t < 0)
+			t+=xOut.length;
+
+		if(t == fhLoc){
+			endi = i;
+			i = xOut.length;
+		} else {
+			xFw[i] = xOut[t];
+			yFw[i] = yOut[t];
+		}
+	}
+}
+
+
+
+xFw = Array.slice(xFw,0,endi);
+yFw = Array.slice(yFw,0,endi);
+
+//Array.show(xFw, yFw);
+
+xFw = Array.concat(xFw, xWing, xBase[0]);
+yFw = Array.concat(yFw, yWing, yBase[0]);
+
+
+while(roiManager("Count") > 0){
+	roiManager("Select", 0);
+	roiManager("Delete");
+}
+
+makeSelection("freehand", xFw, yFw);
+
+roiManager("Add");
+roiManager("Deselect");
+roiManager("Select", roiManager("Count")-1);
+roiManager("Set Color", "green");
+roiManager("Set Line Width", 2);
+roiManager("Rename", "forewing");
+
+//----------------------Repeat for hindwing---------------------
+
+// Find permimeter point nearest bottom-right of image
+minD = 10E10;
+
+blLoc = 0;
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(w-xOut[i], 2) + pow(h-yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		blLoc = i;
+	}
+}
+
+// Find permimeter point nearest the hindwing base
+minD = 10E10;
+hbLoc = 0; // hindwing-base
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(xBase[1] - xOut[i], 2) + pow(yBase[1] - yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		hbLoc = i; // hindwing-base
+	}
+}
+
+
+
+xHw = newArray(xOut.length);
+yHw = newArray(yOut.length);
+
+
+f = 0;
+for(i=0; i<xOut.length; i++){
+	t = i + hbLoc;
+	while(t > xOut.length-1)
+		t-=xOut.length;
+
+	if(t == blLoc)
+		f = 1; // this flag goes to 1 if the permimeter passes trhough the top left wingtip
+
+	if(t == fhLoc){
+		endi = i;
+		i = xOut.length;
+	} else {
+		xHw[i] = xOut[t];
+		yHw[i] = yOut[t];
+	}
+}
+
+
+if(f == 0){ // perimeter was in the wrong direction - repeat
+
+	xHw = newArray(xOut.length);
+	yHw = newArray(yOut.length);
+
+	for(i=0; i<xOut.length; i++){
+		t = hbLoc - i;
+		while(t < 0)
+			t+=xOut.length;
+
+		if(t == fhLoc){
+			endi = i;
+			i = xOut.length;
+		} else {
+			xHw[i] = xOut[t];
+			yHw[i] = yOut[t];
+		}
+	}
+}
+
+
+xHw = Array.slice(xHw,0,endi);
+yHw = Array.slice(yHw,0,endi);
+
+xHw = Array.concat(xHw, xWing, xBase[1]);
+yHw = Array.concat(yHw, yWing, yBase[1]);
+
+run("Select None");
+makeSelection("freehand", xHw, yHw);
+
+roiManager("Add");
+roiManager("Deselect");
+roiManager("Select", roiManager("Count")-1);
+roiManager("Set Color", "red");
+roiManager("Set Line Width", 2);
+roiManager("Rename", "hindwing");
+
+makeLine(xHeadTail[0], yHeadTail[0], xHeadTail[1], yHeadTail[1]);
+roiManager("Add");
+roiManager("Deselect");
+roiManager("Select", roiManager("Count")-1);
+roiManager("Set Color", "blue");
+roiManager("Set Line Width", 2);
+roiManager("Rename", "head-tail");
+
+
+roiManager("Select", newArray(0,1,2));
+run("From ROI Manager");
+
+
+
+sex = newArray("Unknown", "Male", "Female");
+
+Dialog.create("Butterfly Info");
+
+	Dialog.addMessage("Check the wing selections look good\n ");
+	//Dialog.addChoice("Listed species", species, "Not Listed");
+
+	Dialog.addString("Genus", "", 20);
+	Dialog.addString("Species", "", 20);
+	Dialog.addString("Subspecies", "", 20);
+	Dialog.addRadioButtonGroup("Sex", sex, 3, 1, "Unknown");
+	Dialog.addString("Source of Image", "", 20);
+
+Dialog.show();
+
+
+genus = Dialog.getString();
+species = Dialog.getString();
+subspecies = Dialog.getString();
+sexed = Dialog.getRadioButton();
+source = Dialog.getString();
+
+
+
+
+
+/*
+print("Genus: " + genus);
+print("Species: " +species);
+print("Subspecies: " + subspecies);
+print("Sex: " + sexed);
+*/
+
+
+
+ts = "genus:" + genus + " species:" + species + " subspecies:" + subspecies + " sex:" + sexed  + " pxmm:" + pxmm + " imsource:" + source;
+setMetadata("Info", ts);
+
+if(saveDir == "")
+	saveDir= getDirectory("Choose a directory to save processed butterflies");
+
+
+ts = saveDir + genus + "_" + species + "_" + subspecies + "_" + sexed + "_" + pxmm + ".tif"; 
+
+if(File.exists(ts) == 1){
+
+	Dialog.create("Butterfly Info");
+	Dialog.addMessage("A butterfly with this name has already been processed\nAdd a new identifier");
+	Dialog.addString("Identifier", "", 20);
+	Dialog.show();
+
+	iden = Dialog.getString();
+	
+	ts = saveDir + genus + "_" + species + "_" + subspecies + "_" + sexed + "_" + pxmm +  "_" + iden + ".tif"; 
+	
+}
+
+saveAs("Tiff", ts);
+close();
+
+

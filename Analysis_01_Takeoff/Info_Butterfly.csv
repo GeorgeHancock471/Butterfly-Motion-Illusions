@@ -1,0 +1,17 @@
+﻿Code,Binomial,Common_Name,Sex,ButterflyNote
+AcM,Anthocharis_cardamines,"""Orange-tip Butterfly""",M,"""Males have orange wing tips"""
+AcF,Anthocharis_cardamines,"""Orange-tip Butterfly""",F,"""Females have gray wing tips"""
+HmF,Hypolimnas_misippus,"""Danaid eggfly""",F,"""Females are Danus mimics"""
+HmM,Hypolimnas_misippus,"""Danaid eggfly""",M,"""Males are black with white spots"""
+PdF,Papilio_dardanus_ochracea,"""Saharan swallowtail""",F,"""Females of this subspecies mimic Danainae"""
+PdM,Papilio_dardanus_ochracea,"""Saharan swallowtail""",M,"""Males are white and black with long tails"""
+Pm,Papilio_machaon,"""European swallowtail""",a,"""Yellow and black patterned swallowtail"""
+Va,Vanessa_atalanta,"""Red Admiral""",a,"""Red black and white"""
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,

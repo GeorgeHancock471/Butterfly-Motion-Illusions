@@ -1,0 +1,133 @@
+
+Dialog.create("Elemental Motion Detector Settings");
+
+	Dialog.addString("Label", "",20);
+	Dialog.addString("Column Label", "",20);
+	Dialog.addNumber("Row", 0);
+
+Dialog.show();
+
+rowLabel = Dialog.getString();
+colLabel =  Dialog.getString();
+row = Dialog.getNumber();
+
+
+run("Remove Overlay");
+
+setBatchMode(true);
+
+
+run("Elemental Motion Detector2");
+
+lVals = newArray(nSlices);
+rVals = newArray(nSlices);
+uVals = newArray(nSlices);
+dVals = newArray(nSlices);
+udVals = newArray(nSlices);
+
+
+//--------------------Measure Motion Detector Profiles---------------------------
+
+selectImage("Left Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setResult("Label", row+i, rowLabel);
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult(colLabel+"_Left", row+i, mean);
+	lVals[i] = mean;
+}
+
+
+selectImage("Right Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult(colLabel+"_Right", row+i, mean);
+	rVals[i] = mean;
+}
+
+
+selectImage("Up Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult(colLabel+"_Up", row+i, mean);
+	uVals[i] = mean;
+}
+
+
+selectImage("Down Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult(colLabel+"_Down", row+i, mean);
+	dVals[i] = mean;
+	udVals[i] = (uVals[i] - dVals[i])/(uVals[i] + dVals[i]);
+	setResult(colLabel+"_UpDownContrast", row+i, udVals[i] );
+}
+
+
+selectImage("Right Detectors");
+close();
+selectImage("Up Detectors");
+close();
+selectImage("Down Detectors");
+close();
+selectImage("Left Detectors");
+close();
+
+updateResults();
+
+/*
+
+IJ.renameResults("Results", "Motion Energy");
+
+
+windowList = getList("window.titles");
+for(i=0; i<windowList.length; i++)
+	if(windowList[i] == "Summary Results")
+		IJ.renameResults("Summary Results", "Results");
+*/
+
+Array.getStatistics(rVals, rMin, rMax, rMean, rSD);
+Array.getStatistics(lVals, lMin, lMax, lMean, lSD);
+Array.getStatistics(uVals, uMin, uMax, uMean, uSD);
+Array.getStatistics(dVals, dMin, dMax, dMean, dSD);
+Array.getStatistics(udVals, udMin, udMax, udMean, udSD);
+
+/*
+row = nResults();
+setResult("Label", row, rowLabel + "_" +colLabel);
+
+setResult("Left_Mean", row, lMean);
+setResult("Left_Min", row, lMin);
+setResult("Left_Max", row, lMax);
+setResult("Left_SD", row, lSD);
+
+setResult("Right_Mean", row, rMean);
+setResult("Right_Min", row, rMin);
+setResult("Right_Max", row, rMax);
+setResult("Right_SD", row, rSD);
+
+setResult("Up_Mean", row, uMean);
+setResult("Up_Min", row, uMin);
+setResult("Up_Max", row, uMax);
+setResult("Up_SD", row, uSD);
+
+setResult("Down_Mean", row, dMean);
+setResult("Down_Min", row, dMin);
+setResult("Down_Max", row, dMax);
+setResult("Down_SD", row, dSD);
+
+
+updateResults();
+*/
+
+
+print("[Summary Results]", rowLabel + "_" +colLabel + "\t" + lMean + "\t" + lMin + "\t" + lMax + "\t" + lSD + "\t" + rMean + "\t" + rMin + "\t" + rMax + "\t" + rSD + "\t" + uMean + "\t" + uMin + "\t" + uMax + "\t" + uSD  + "\t" + dMean + "\t" + dMin + "\t" + dMax + "\t" + dSD  + "\t" + udMean);
+
+

@@ -1,0 +1,233 @@
+
+
+run("Remove Overlay");
+
+Dialog.create("Elementary Motion Detector Settings");
+
+	Dialog.addNumber("DoG_Low_Pass", 4);
+	Dialog.addNumber("DoG_High_Pass", 8);
+	Dialog.addNumber("Temporal_Gaussian_Blur", 5);
+	Dialog.addNumber("Output false colour brightness", 5);
+
+Dialog.show();
+
+DoG1 = Dialog.getNumber(); // high-pass Gaussian
+DoG2 = Dialog.getNumber(); // low-pass Gaussian
+tG = Dialog.getNumber(); // temporal Gaussian; at 1000fps Sigma=5 is good for 100Hz FFF (signal approx 1% of original)
+thresh = Dialog.getNumber(); // This is the brightness of the false-colour image output 5 for 10:20, 10 for 5:10
+
+
+
+setBatchMode(true);
+
+run("Duplicate...", "title=highPass duplicate");
+run("32-bit");
+
+run("Duplicate...", "title=lowPass duplicate");
+run("Gaussian Blur...", "sigma=&DoG2 stack");
+
+selectImage("highPass");
+run("Gaussian Blur...", "sigma=&DoG1 stack");
+
+imageCalculator("Subtract stack", "highPass","lowPass");
+
+DoGImage = "DoG " + DoG1 + "-" + DoG2;
+
+rename(DoGImage);
+
+selectImage("lowPass");
+close();
+
+selectImage(DoGImage);
+run("Gaussian Blur 3D...", "x=0 y=0 z=&tG");
+setBatchMode("show");
+
+
+
+imTitle = getTitle();
+
+thresh = 25;
+
+run("Elemental Motion Detector2");
+
+//--------------------Measure Motion Detector Profiles---------------------------
+
+selectImage("Left Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Left", i, mean);
+}
+
+run("Red");
+setMinAndMax(0, thresh);
+run("RGB Color");
+
+selectImage("Right Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Right", i, mean);
+}
+
+run("Blue");
+setMinAndMax(0, thresh);
+run("RGB Color");
+
+selectImage("Up Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Up", i, mean);
+}
+run("Green");
+setMinAndMax(0, thresh);
+run("RGB Color");
+
+selectImage("Down Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Down", i, mean);
+}
+run("BlueRed");
+setMinAndMax(0, thresh);
+run("RGB Color");
+
+imageCalculator("Add stack", "Left Detectors","Right Detectors");
+imageCalculator("Add stack", "Left Detectors","Up Detectors");
+imageCalculator("Add stack", "Left Detectors","Down Detectors");
+
+
+selectImage("Right Detectors");
+close();
+selectImage("Up Detectors");
+close();
+selectImage("Down Detectors");
+close();
+selectImage("Left Detectors");
+rename(imTitle + " Motion ");
+
+setBatchMode("show");
+
+
+/*
+//----------------------Rob fish motion-------------------
+w = getWidth();
+h = getHeight();
+
+run("Set...", "value=0 stack");
+
+
+for(i=0; i<200; i++){
+
+	setSlice(i+1);
+	run("Select None");
+	makeRectangle(-2*i, 0, w, h);
+	run("Paste");
+
+
+}
+
+
+------------------Combine Two Films-------------------------
+
+
+selectImage("left");
+run("Select All");
+w = getWidth();
+h = getHeight();
+z = nSlices()-1;
+
+newImage("Combo", "RGB", w*2, h, z);
+selectImage("right");
+run("Select All");
+
+for(i=1; i<=z; i++){
+	selectImage("left");
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	setSlice(i);
+	makeRectangle(0,0,w,h);
+	run("Paste");
+	selectImage("right");
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	makeRectangle(w,0,w,h);
+	run("Paste");
+
+}
+
+
+------------------Combine Three Films-------------------------
+
+setBatchMode(true);
+
+selectImage("left");
+run("Select All");
+w = getWidth();
+h = getHeight();
+z = nSlices()-1;
+
+newImage("Combo", "RGB", w*3, h, z);
+selectImage("mid");
+run("Select All");
+selectImage("right");
+run("Select All");
+
+for(i=1; i<=z; i++){
+	selectImage("left");
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	setSlice(i);
+	makeRectangle(0,0,w,h);
+	run("Paste");
+
+	selectImage("mid");
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	makeRectangle(w,0,w,h);
+	run("Paste");
+
+	selectImage("right");
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	makeRectangle(w*2,0,w,h);
+	run("Paste");
+
+}
+
+
+selectImage("Combo");
+setBatchMode("show");
+
+
+//--------------------------Make Growing Circle--------------------------------
+newImage("Untitled", "32-bit black", 500, 500, 50);
+w = getWidth();
+h = getHeight();
+z = nSlices();
+sD = 100;
+sR = sD/2;
+
+for(i=1; i<=z; i++){
+	setSlice(i);
+	makeOval((w/2)-i-sR,(h/2)-i-sR,sD+i*2,sD+i*2);
+	run("Fill", "slice");
+
+}
+
+
+*/
+
+
+

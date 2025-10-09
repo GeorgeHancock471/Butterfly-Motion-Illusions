@@ -1,0 +1,7 @@
+while(roiManager("count")>0){
+roiManager("select", Array.getSequence(roiManager("count")));
+roiManager("Delete");
+}
+run("To ROI Manager");
+
+

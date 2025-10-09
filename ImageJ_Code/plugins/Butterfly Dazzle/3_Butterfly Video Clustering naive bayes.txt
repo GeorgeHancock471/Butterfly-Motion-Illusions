@@ -1,0 +1,39 @@
+setBatchMode(true);
+
+run("Select None");
+
+stackID = getImageID();
+h = getHeight();
+w = getWidth();
+d = nSlices;
+
+newImage("Clustered", "8-bit", w, h, d);
+clusteredID = getImageID();
+
+for(i=0; i<d; i++){
+	selectImage(stackID);
+	setSlice(i+1);
+	run("Duplicate...", "title=temp");
+	tID = getImageID();
+	run("RGB to 32Bit");
+	run("Naive Bayes Classify");
+	selectImage("Zone IDs");
+	run("8-bit");
+	run("Select All");
+	run("Copy");
+	close();
+	selectImage("Output");
+	close();
+	selectImage("temp");
+	close();
+
+	selectImage(clusteredID);
+	setSlice(i+1);
+	run("Select All");
+	run("Paste");
+	setBatchMode("show");
+
+}
+run("Select None");
+run("RGB Color");
+rename("Clustered");

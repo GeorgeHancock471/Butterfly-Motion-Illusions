@@ -1,0 +1,61 @@
+//...............................................................
+//...............................................................
+//Frame Interp No Colour
+//...............................................................
+//...............................................................
+if(isOpen("SkipVideo")) close("SkipVideo");
+
+Dialog.create("Settings");
+Dialog.addNumber("Wing beat frq (Hz)", 9);
+Dialog.addNumber("CFF", 60);
+Dialog.addNumber("FramesPerCycle", 165);
+Dialog.show();
+
+WBF=Dialog.getNumber();
+displayF = Dialog.getNumber();
+FramesPerCycle = Dialog.getNumber();
+
+
+
+actualF = FramesPerCycle*WBF;
+
+
+rV= actualF/displayF;
+
+print(rV);
+img=getTitle();
+w=getWidth();
+h=getHeight();
+
+print(nSlices);
+oldS=nSlices;
+newS = Math.ceil(nSlices/rV);
+
+print(newS);
+
+
+//Make Stack
+//...................................................................
+//setBatchMode(true);
+newImage("SkipVideo", "RGB Color", w, h, newS);
+
+
+for(j=0;j<newS;j++){
+	selectImage(img);
+	ft=(j/newS)*oldS+1;
+	print(ft);
+
+	setSlice(Math.floor(ft));
+	run("Copy"); setPasteMode("Copy");
+	selectImage("SkipVideo");
+	setSlice(j+1);
+	run("Paste");
+
+}
+	
+setBatchMode("show");
+run("Set Min And Max", "min=0 max=255");
+
+
+
+

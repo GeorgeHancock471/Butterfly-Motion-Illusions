@@ -1,0 +1,8 @@
+Target = 	Papilio_Template
+Generation = 	20
+PopSize = 	48
+NumSlide = 	1
+TimeOutTime = 	15000
+StartSpace =	15	90	0	0	0	0
+ColourSpace =	15	90	0	0	0	0
+FitnessValue = 	Camouflage

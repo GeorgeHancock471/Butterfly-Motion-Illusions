@@ -1,0 +1,110 @@
+Dialog.create("Elemental Motion Detector Settings");
+
+	Dialog.addNumber("Spatial Sigma:",8);
+	Dialog.addNumber("Temporal Sigma", 5);
+
+Dialog.show();
+
+sG = Dialog.getNumber(); // spatial Gaussian blur sigma (low pass only)
+tG = Dialog.getNumber(); // temporal blur
+
+thresh = 10; // This is the brightness of the false-colour image output 5 for 10:20, 10 for 5:10
+
+run("Duplicate...", "title=SpatialBlur duplicate");
+
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+run("Elemental Motion Detector2");
+
+//--------------------Measure Motion Detector Profiles---------------------------
+
+selectImage("Left Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Left", i, mean);
+}
+
+//run("Red");
+setMinAndMax(0, thresh);
+run("RGB Color");
+run("32-bit");
+
+selectImage("Right Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Right", i, mean);
+}
+
+//run("Red");
+setMinAndMax(0, thresh);
+run("RGB Color");
+run("32-bit");
+
+selectImage("Up Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Up", i, mean);
+}
+//run("Cyan");
+setMinAndMax(0, thresh);
+run("RGB Color");
+run("32-bit");
+
+selectImage("Down Detectors");
+run("Select All");
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	getStatistics(area, mean);
+	setResult("Down", i, mean);
+}
+//run("Red");
+setMinAndMax(0, thresh);
+run("RGB Color");
+run("32-bit");
+
+imageCalculator("Subtract create stack", "Up Detectors","Down Detectors");
+rename("Up-Down");
+
+
+imageCalculator("Subtract create stack", "Up Detectors","Left Detectors");
+rename("Side-Down");
+imageCalculator("Subtract stack", "Side-Down","Right Detectors");
+
+exit
+
+imageCalculator("Add stack", "Left Detectors","Right Detectors");
+imageCalculator("Add stack", "Left Detectors","Up Detectors");
+imageCalculator("Add stack", "Left Detectors","Down Detectors");
+
+
+selectImage("Right Detectors");
+close();
+selectImage("Up Detectors");
+close();
+selectImage("Down Detectors");
+close();
+selectImage("Left Detectors");
+//rename("Motion "+DoGImage + " temporal Gaussian: " + tG);
+
+setBatchMode("show");
+
+
+

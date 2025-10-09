@@ -1,0 +1,16 @@
+
+//Directory
+D=getDirectory("Populations");
+F=getFileList(D);
+
+for(i=0;i<F.length;i++){
+
+if(endsWith(F[i],"/")){
+
+run("GA Hancock Measures 3 G20", "butterfly="+D+F[i]);
+
+
+}
+}
+
+

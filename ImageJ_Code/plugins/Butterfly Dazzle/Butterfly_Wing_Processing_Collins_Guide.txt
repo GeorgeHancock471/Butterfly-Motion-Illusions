@@ -1,0 +1,411 @@
+/*
+
+
+PLAN:
+
+-Select image
+-input information
+	-species
+	-genus
+	-family
+	-scan resolution (px/mm)
+-draw box around butterfly
+-if not straight draw line from head to tail (used for angle & rotation)
+-draw line from intersection of forewing and hindwing at body and at edge of wings
+-draw polyline to seprate forewing and hindwing
+-use thresholding to select outline ROI & make backgournd black (zero pixel values - ignored by toolbox)
+
+
+
+*/
+h = getHeight();
+w = getWidth();
+
+saveDir = getInfo("image.directory");
+title = getTitle();
+
+
+
+setTool("rectangle");
+waitForUser("Draw box around butterfly, or click ok to use whole image");
+if(selectionType() == 0)
+	run("Duplicate...", "title=butterfly");
+else rename("butterfly");
+
+run("Select None");
+setTool("line");
+waitForUser("Draw a line from head to tail");
+
+/*
+if(selectionType == 5){
+	getSelectionCoordinates(x, y);
+	run("Select None");
+	if(x[0] != x[1]){
+		angle = 180/PI*((x[1]-x[0])/(y[1]-y[0]));
+		run("Rotate... ", "angle=&angle grid=1 interpolation=Bilinear enlarge");
+	}
+}
+*/
+
+
+getSelectionCoordinates(xHeadTail, yHeadTail);
+
+
+run("Select None");
+f = 0;
+while(f == 0){
+
+waitForUser("Draw a line from the base of the forewing to the base of the hindwing");
+	if(selectionType == 5){
+		getSelectionCoordinates(xBase, yBase);
+		f = 1;
+	}
+}
+
+setTool("polyline");
+run("Select None");
+f = 0;
+while(f == 0){
+
+waitForUser("Draw a polyline between the right-hand forewing and hindwing");
+	if(selectionType == 5 || selectionType == 6 || selectionType == 7){
+		getSelectionCoordinates(xWing, yWing);
+		f = 1;
+	}
+}
+
+run("Select All");
+//run("Copy");
+run("Duplicate...", "title=mask");
+
+run("32-bit");
+run("Add Image...", "image=butterfly x=0 y=0 opacity=80");
+
+setThreshold(0, 220);
+setForegroundColor(0,0,0);
+//setForegroundColor(255,255,255);
+setBackgroundColor(0,0,0);
+run("Threshold...");
+setTool("Paintbrush Tool");
+
+waitForUser("Select suitable threshold to remove background, and use the brush to create an intact edge");
+
+
+run("Convert to Mask");
+run("Invert");
+run("Remove Overlay");
+
+setTool("Wand");
+
+f = 0;
+while(f == 0){
+waitForUser("Select the butterfly using the wand");
+	if(selectionType == 2 || selectionType ==  3  || selectionType ==  4){
+		getSelectionCoordinates(xOut, yOut);
+		f = 1;
+	}
+}
+
+selectImage("mask");
+close();
+selectImage("butterfly");
+
+// Rearrange selections to correct order (top to bottom, left to right)
+if(xWing[0] < xWing[xWing.length-1]){
+	xWing = Array.reverse(xWing);
+	yWing = Array.reverse(yWing);
+}
+
+
+if(yBase[0] > yBase[1]){
+	xBase = Array.reverse(xBase);
+	yBase = Array.reverse(yBase);
+}
+
+
+//------------------------Create wing selections-------------------------------
+
+
+// Find permimeter point nearest the forewing base
+minD = 10E10;
+fbLoc = 0; // forewing-base
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(xBase[0] - xOut[i], 2) + pow(yBase[0] - yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		fbLoc = i; // forewing-base
+	}
+}
+
+
+// Find permimeter point nearest the forewing-hindwing intersection
+minD = 10E10;
+fhLoc = 0;
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(xWing[0] - xOut[i], 2) + pow(yWing[0] - yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		fhLoc = i; // forewing-hindwing
+	}
+}
+
+// Find permimeter point nearest top-right of image
+minD = 10E10;
+tlLoc = 0;
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(w-xOut[i], 2) + pow(yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		tlLoc = i; // forewing-hindwing
+	}
+}
+
+
+
+xFw = newArray(xOut.length);
+yFw = newArray(yOut.length);
+
+
+f = 0;
+for(i=0; i<xOut.length; i++){
+	t = i + fbLoc;
+	while(t > xOut.length-1)
+		t-=xOut.length;
+
+	if(t == tlLoc)
+		f = 1; // this flag goes to 1 if the permimeter passes trhough the top left wingtip
+
+	if(t == fhLoc){
+		endi = i;
+		i = xOut.length;
+	} else {
+		xFw[i] = xOut[t];
+		yFw[i] = yOut[t];
+	}
+}
+
+
+if(f == 0){ // perimeter was in the wrong direction - repeat
+
+	//makeSelection("freeline", xFw, yFw);
+	//waitForUser("wrong direction");
+
+	xFw = newArray(xOut.length);
+	yFw = newArray(yOut.length);
+
+
+	for(i=0; i<xOut.length; i++){
+		t = fbLoc - i;
+		while(t < 0)
+			t+=xOut.length;
+
+		if(t == fhLoc){
+			endi = i;
+			i = xOut.length;
+		} else {
+			xFw[i] = xOut[t];
+			yFw[i] = yOut[t];
+		}
+	}
+}
+
+
+
+xFw = Array.slice(xFw,0,endi);
+yFw = Array.slice(yFw,0,endi);
+
+//Array.show(xFw, yFw);
+
+xFw = Array.concat(xFw, xWing, xBase[0]);
+yFw = Array.concat(yFw, yWing, yBase[0]);
+
+
+while(roiManager("Count") > 0){
+	roiManager("Select", 0);
+	roiManager("Delete");
+}
+
+makeSelection("freehand", xFw, yFw);
+
+roiManager("Add");
+roiManager("Deselect");
+roiManager("Select", roiManager("Count")-1);
+roiManager("Set Color", "green");
+roiManager("Set Line Width", 2);
+roiManager("Rename", "forewing");
+
+//----------------------Repeat for hindwing---------------------
+
+// Find permimeter point nearest bottom-right of image
+minD = 10E10;
+
+blLoc = 0;
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(w-xOut[i], 2) + pow(h-yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		blLoc = i;
+	}
+}
+
+// Find permimeter point nearest the hindwing base
+minD = 10E10;
+hbLoc = 0; // hindwing-base
+for(i=0; i<xOut.length; i++){
+	D = pow( pow(xBase[1] - xOut[i], 2) + pow(yBase[1] - yOut[i], 2), 0.5);
+	if(D < minD){
+		minD = D;
+		hbLoc = i; // hindwing-base
+	}
+}
+
+
+
+xHw = newArray(xOut.length);
+yHw = newArray(yOut.length);
+
+
+f = 0;
+for(i=0; i<xOut.length; i++){
+	t = i + hbLoc;
+	while(t > xOut.length-1)
+		t-=xOut.length;
+
+	if(t == blLoc)
+		f = 1; // this flag goes to 1 if the permimeter passes trhough the top left wingtip
+
+	if(t == fhLoc){
+		endi = i;
+		i = xOut.length;
+	} else {
+		xHw[i] = xOut[t];
+		yHw[i] = yOut[t];
+	}
+}
+
+
+if(f == 0){ // perimeter was in the wrong direction - repeat
+
+	xHw = newArray(xOut.length);
+	yHw = newArray(yOut.length);
+
+	for(i=0; i<xOut.length; i++){
+		t = hbLoc - i;
+		while(t < 0)
+			t+=xOut.length;
+
+		if(t == fhLoc){
+			endi = i;
+			i = xOut.length;
+		} else {
+			xHw[i] = xOut[t];
+			yHw[i] = yOut[t];
+		}
+	}
+}
+
+
+xHw = Array.slice(xHw,0,endi);
+yHw = Array.slice(yHw,0,endi);
+
+xHw = Array.concat(xHw, xWing, xBase[1]);
+yHw = Array.concat(yHw, yWing, yBase[1]);
+
+run("Select None");
+makeSelection("freehand", xHw, yHw);
+
+roiManager("Add");
+roiManager("Deselect");
+roiManager("Select", roiManager("Count")-1);
+roiManager("Set Color", "red");
+roiManager("Set Line Width", 2);
+roiManager("Rename", "hindwing");
+
+makeLine(xHeadTail[0], yHeadTail[0], xHeadTail[1], yHeadTail[1]);
+roiManager("Add");
+roiManager("Deselect");
+roiManager("Select", roiManager("Count")-1);
+roiManager("Set Color", "blue");
+roiManager("Set Line Width", 2);
+roiManager("Rename", "head-tail");
+
+
+roiManager("Select", newArray(0,1,2));
+run("From ROI Manager");
+
+
+
+
+species = newArray("Not Listed","Aglais_ichnusa","Aglais_io","Aglais_urticae","Agriades_aquilo","Agriades_dardanus","Agriades_glandon","Agriades_optilete","Agriades_orbitulus","Agriades_pyrenaicus","Agriades_zullichi","Anthocharis_cardamines","Anthocharis_damone","Anthocharis_euphenoides","Anthocharis_gruneri","Apatura_ilia","Apatura_iris","Apatura_metis","Aphantopus_hyperantus","Aporia_crataegi","Araschnia_levana","Archon_apollinus","Arethusana_arethusa","Argynnis_laodice","Argynnis_pandora","Argynnis_paphia","Aricia_agestis","Aricia_anteros","Aricia_artaxerxes","Aricia_cramera","Aricia_montensis","Aricia_morronensis","Aricia_nicias","Azanus_jesous","Azanus_ubaldus","Boloria_alaskensis","Boloria_angarensis","Boloria_aquilonaris","Boloria_chariclea","Boloria_dia","Boloria_eunomia","Boloria_euphrosyne","Boloria_freija","Boloria_frigga","Boloria_graeca","Boloria_improba","Boloria_napaea","Boloria_oscarus","Boloria_pales","Boloria_polaris","Boloria_selene","Boloria_selenis","Boloria_thore","Boloria_titania","Boloria_tritonia","Borbo_borbonica","Brenthis_daphne","Brenthis_hecate","Brenthis_ino","Brintesia_circe","Cacyreus_marshalli","Callophrys_avis","Callophrys_chalybeitincta","Callophrys_rubi","Callophrys_suaveola","Carcharodus_alceae","Carcharodus_baeticus","Carcharodus_floccifera","Carcharodus_lavatherae","Carcharodus_orientalis","Carcharodus_stauderi","Carcharodus_tripolinus","Carterocephalus_palaemon","Carterocephalus_silvicola","Catopsilia_florella","Celastrina_argiolus","Charaxes_jasius","Chazara_briseis","Chazara_persephone","Chazara_prieuri","Cigaritis_acamas","Coenonympha_amaryllis","Coenonympha_arcania","Coenonympha_corinna","Coenonympha_dorus","Coenonympha_gardetta","Coenonympha_glycerion","Coenonympha_hero","Coenonympha_leander","Coenonympha_oedippus","Coenonympha_orientalis","Coenonympha_pamphilus","Coenonympha_phryne","Coenonympha_rhodopensis","Coenonympha_thyrsis","Coenonympha_tullia","Colias_alfacariensis","Colias_aurorina","Colias_caucasica","Colias_chrysotheme","Colias_crocea","Colias_erate","Colias_hecla","Colias_hyale","Colias_myrmidone","Colias_palaeno","Colias_phicomone","Colias_tyche","Colotis_evagore","Cupido_alcetas","Cupido_argiades","Cupido_decoloratus","Cupido_lorquinii","Cupido_minimus","Cupido_osiris","Cyaniris_semiargus","Cyclyrius_webbianus","Danaus_chrysippus","Danaus_plexippus","Erebia_aethiopella","Erebia_aethiops","Erebia_albergana","Erebia_arvernensis","Erebia_calcarius","Erebia_callias","Erebia_cassioides","Erebia_christi","Erebia_claudina","Erebia_cyclopius","Erebia_dabanensis","Erebia_disa","Erebia_discoidalis","Erebia_edda","Erebia_embla","Erebia_epiphron","Erebia_epistygne","Erebia_eriphyle","Erebia_euryale","Erebia_fasciata","Erebia_flavofasciata","Erebia_gorge","Erebia_gorgone","Erebia_hispania","Erebia_jeniseiensis","Erebia_lefebvrei","Erebia_ligea","Erebia_manto","Erebia_medusa","Erebia_melampus","Erebia_melas","Erebia_meolans","Erebia_mnestra","Erebia_montana","Erebia_neleus","Erebia_neoridas","Erebia_nivalis","Erebia_oeme","Erebia_orientalis","Erebia_ottomana","Erebia_palarica","Erebia_pandrose","Erebia_pharte","Erebia_pluto","Erebia_polaris","Erebia_pronoe","Erebia_rhodopensis","Erebia_rondoui","Erebia_rossii","Erebia_scipio","Erebia_sthennyo","Erebia_stiria","Erebia_styx","Erebia_sudetica","Erebia_triarius","Erebia_tyndarus","Erebia_zapateri","Erynnis_marloyi","Erynnis_tages","Euchloe_ausonia","Euchloe_bazae","Euchloe_belemia","Euchloe_charlonia","Euchloe_crameri","Euchloe_eversi","Euchloe_grancanariensis","Euchloe_hesperidum","Euchloe_insularis","Euchloe_penia","Euchloe_simplonia","Euchloe_tagis","Eumedonia_eumedon","Euphydryas_aurinia","Euphydryas_cynthia","Euphydryas_desfontainii","Euphydryas_iduna","Euphydryas_intermedia","Euphydryas_maturna","Fabriciana_adippe","Fabriciana_elisa","Fabriciana_niobe","Favonius_quercus","Freyeria_trochylus","Gegenes_nostrodamus","Gegenes_pumilio","Glabroculus_cyane","Glaucopsyche_alexis","Glaucopsyche_melanops","Glaucopsyche_paphos","Gonepteryx_cleobule","Gonepteryx_cleopatra","Gonepteryx_farinosa","Gonepteryx_maderensis","Gonepteryx_rhamni","Hamearis_lucina","Hesperia_comma","Heteropterus_morpheus","Hipparchia_aristaeus","Hipparchia_autonoe","Hipparchia_azorina","Hipparchia_bacchus","Hipparchia_blachieri","Hipparchia_christenseni","Hipparchia_cretica","Hipparchia_cypriensis","Hipparchia_fagi","Hipparchia_fatua","Hipparchia_fidia","Hipparchia_gomera","Hipparchia_hermione","Hipparchia_leighebi","Hipparchia_maderensis","Hipparchia_mersina","Hipparchia_miguelensis","Hipparchia_neapolitana","Hipparchia_neomiris","Hipparchia_pellucida","Hipparchia_sbordonii","Hipparchia_semele","Hipparchia_senthes","Hipparchia_statilinus","Hipparchia_syriaca","Hipparchia_tamadabae","Hipparchia_tilosi","Hipparchia_volgensis","Hipparchia_wyssii","Hypolimnas_misippus","Hyponephele_huebneri","Hyponephele_lupina","Hyponephele_lycaon","Iolana_debilitata","Iolana_iolas","Iphiclides_feisthamelii","Iphiclides_podalirius","Issoria_eugenia","Issoria_lathonia","Kirinia_climene","Kirinia_roxelana","Kretania_eurypilus","Kretania_hesperica","Kretania_psylorita","Kretania_pylaon","Kretania_sephirus","Kretania_trappi","Laeosopis_roboris","Lampides_boeticus","Lasiommata_deidamia","Lasiommata_maera","Lasiommata_megera","Lasiommata_paramegaera","Lasiommata_petropolitana","Leptidea_duponcheli","Leptidea_juvernica","Leptidea_morsei","Leptidea_reali","Leptidea_sinapis","Leptotes_pirithous","Libythea_celtis","Limenitis_camilla","Limenitis_populi","Limenitis_reducta","Lopinga_achine","Luthrodes_galba","Lycaena_alciphron","Lycaena_bleusei","Lycaena_candens","Lycaena_dimorpha","Lycaena_dispar","Lycaena_helle","Lycaena_hippothoe","Lycaena_ottomana","Lycaena_phlaeas","Lycaena_thersamon","Lycaena_thetis","Lycaena_tityrus","Lycaena_virgaureae","Lysandra_albicans","Lysandra_bellargus","Lysandra_caelestissima","Lysandra_coridon","Lysandra_corydonius","Lysandra_hispana","Maniola_chia","Maniola_cypricola","Maniola_halicarnassus","Maniola_jurtina","Maniola_megala","Maniola_nurag","Maniola_telmessia","Melanargia_arge","Melanargia_galathea","Melanargia_ines","Melanargia_lachesis","Melanargia_larissa","Melanargia_occitanica","Melanargia_pherusa","Melanargia_russiae","Melitaea_aetherie","Melitaea_arduinna","Melitaea_asteria","Melitaea_athalia","Melitaea_aurelia","Melitaea_britomartis","Melitaea_celadussa","Melitaea_cinxia","Melitaea_deione","Melitaea_diamina","Melitaea_didyma","Melitaea_ornata","Melitaea_parthenoides","Melitaea_phoebe","Melitaea_trivia","Melitaea_varia","Minois_dryas","Muschampia_cribrellum","Muschampia_proto","Muschampia_tessellum","Neolycaena_rhymnus","Neolysandra_coelestina","Neptis_rivularis","Neptis_sappho","Nymphalis_antiopa","Nymphalis_polychloros","Nymphalis_vaualbum","Nymphalis_xanthomelas","Ochlodes_sylvanus","Oeneis_ammon","Oeneis_bore","Oeneis_glacialis","Oeneis_jutta","Oeneis_magna","Oeneis_melissa","Oeneis_norna","Oeneis_polixenes","Oeneis_tarpeia","Papilio_alexanor","Papilio_hospiton","Papilio_machaon","Pararge_aegeria","Pararge_xiphia","Pararge_xiphioides","Parnassius_apollo","Parnassius_mnemosyne","Parnassius_phoebus","Pelopidas_thrax","Phengaris_alcon","Phengaris_arion","Phengaris_nausithous","Phengaris_teleius","Pieris_balcana","Pieris_brassicae","Pieris_bryoniae","Pieris_cheiranthi","Pieris_ergane","Pieris_krueperi","Pieris_mannii","Pieris_napi","Pieris_rapae","Pieris_wollastoni","Plebejidea_loewii","Plebejus_argus","Plebejus_argyrognomon","Plebejus_bellieri","Plebejus_idas","Polygonia_calbum","Polygonia_egea","Polyommatus_admetus","Polyommatus_amandus","Polyommatus_aroaniensis","Polyommatus_celina","Polyommatus_damocles","Polyommatus_damon","Polyommatus_damone","Polyommatus_daphnis","Polyommatus_dolus","Polyommatus_dorylas","Polyommatus_eros","Polyommatus_escheri","Polyommatus_fabressei","Polyommatus_fulgens","Polyommatus_golgus","Polyommatus_humedasae","Polyommatus_icarus","Polyommatus_iphigenia","Polyommatus_nephohiptamenos","Polyommatus_nivescens","Polyommatus_orphicus","Polyommatus_ripartii","Polyommatus_thersites","Polyommatus_timfristos","Polyommatus_violetae","Pontia_callidice","Pontia_chloridice","Pontia_daplidice","Pontia_edusa","Praephilotes_anthracias","Proterebia_phegea","Pseudochazara_amalthea","Pseudochazara_amymone","Pseudochazara_anthelea","Pseudochazara_cingovskii","Pseudochazara_euxina","Pseudochazara_geyeri","Pseudochazara_graeca","Pseudochazara_mercurius","Pseudochazara_orestes","Pseudochazara_tisiphone","Pseudochazara_williamsi","Pseudophilotes_abencerragus","Pseudophilotes_barbagiae","Pseudophilotes_baton","Pseudophilotes_bavius","Pseudophilotes_panoptes","Pseudophilotes_vicrama","Pyrgus_alveus","Pyrgus_andromedae","Pyrgus_armoricanus","Pyrgus_cacaliae","Pyrgus_carlinae","Pyrgus_carthami","Pyrgus_centaureae","Pyrgus_cinarae","Pyrgus_cirsii","Pyrgus_foulquieri","Pyrgus_malvae","Pyrgus_malvoides","Pyrgus_onopordi","Pyrgus_serratulae","Pyrgus_sidae","Pyrgus_warrenensis","Pyronia_bathseba","Pyronia_cecilia","Pyronia_tithonus","Satyrium_acaciae","Satyrium_esculi","Satyrium_ilicis","Satyrium_ledereri","Satyrium_pruni","Satyrium_spini","Satyrium_walbum","Satyrus_actaea","Satyrus_ferula","Satyrus_virbius","Scolitantides_orion","Speyeria_aglaja","Spialia_orbifer","Spialia_phlomidis","Spialia_rosae","Spialia_sertorius","Spialia_therapne","Tarucus_balkanicus","Tarucus_theophrastus","Thecla_betulae","Thymelicus_acteon","Thymelicus_christi","Thymelicus_hyrax","Thymelicus_lineola","Thymelicus_sylvestris","Tomares_ballus","Tomares_callimachus","Tomares_nogelii","Tongeia_fischeri","Turanana_taygetica","Vanessa_atalanta","Vanessa_cardui","Vanessa_virginiensis","Vanessa_vulcania","Ypthima_asterope","Zegris_eupheme","Zegris_pyrothoe","Zerynthia_cassandra","Zerynthia_caucasica","Zerynthia_cerisy","Zerynthia_cretica","Zerynthia_polyxena","Zerynthia_rumina","Zizeeria_karsandra","Zizeeria_knysna");
+
+
+sex = newArray("Unknown", "Male", "Female");
+
+Dialog.create("Butterfly Info");
+
+	Dialog.addMessage("Check the wing selections look good\n ");
+	Dialog.addChoice("Listed species", species, "Not Listed");
+
+	Dialog.addString("Genus", "", 20);
+	Dialog.addString("Species", "", 20);
+	Dialog.addString("Subspecies", "", 20);
+	Dialog.addRadioButtonGroup("Sex", sex, 3, 1, "Unknown");
+
+Dialog.show();
+
+
+listed = Dialog.getChoice();
+genus = Dialog.getString();
+species = Dialog.getString();
+subspecies = Dialog.getString();
+sexed = Dialog.getRadioButton();
+
+if(listed != "Not Listed"){
+	listed = split(listed, "_");
+	genus = listed[0];
+	species = listed[1];
+}
+
+/*
+print("Genus: " + genus);
+print("Species: " +species);
+print("Subspecies: " + subspecies);
+print("Sex: " + sexed);
+*/
+
+
+
+ts = "genus:" + genus + " species:" + species + " subspecies:" + subspecies + " sex:" + sexed;
+setMetadata("Info", ts);
+
+if(saveDir == "")
+	saveDir= getDirectory("Choose a directory to save processed butterflies");
+else{
+	saveDir = replace(saveDir, title, "");
+	if(endsWith(saveDir, ".png") == 1)
+		replace(saveDir, ".png", "");
+	saveDir = saveDir + "Processed Butterflies/";
+	if(File.exists(saveDir) == 0)
+		File.makeDirectory(saveDir);
+}
+
+
+ts = saveDir + genus + "_" + species + "_" + subspecies + "_" + sexed + ".tif"; 
+
+if(File.exists(ts) == 1){
+
+	Dialog.create("Butterfly Info");
+	Dialog.addMessage("A butterfly with this name has already been processed\nAdd a new identifier");
+	Dialog.addString("Identifier", "", 20);
+	Dialog.show();
+
+	iden = Dialog.getString();
+	
+	ts = saveDir + genus + "_" + species + "_" + subspecies + "_" + sexed + "_" + iden + ".tif"; 
+	
+}
+
+saveAs("Tiff", ts);
+close();
+
+

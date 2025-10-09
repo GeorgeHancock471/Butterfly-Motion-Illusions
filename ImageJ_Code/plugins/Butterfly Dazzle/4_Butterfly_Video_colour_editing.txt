@@ -1,0 +1,65 @@
+plugins = getDirectory("plugins");
+
+installString = "install=[" + plugins + "Butterfly Dazzle/4_Butterfly_Video_colour_editing.txt]";
+
+run("Install...", installString);
+print("Butterfly editing");
+
+exit();
+
+
+macro "Clear Outside [x]"{
+	run("Clear Outside", "slice");
+}
+
+
+
+macro "Flood Fill [f]"{
+	getCursorLoc(x, y, z, flags);
+	floodFill(x, y);
+	//print("x: " + x + " y: " + y + " flag: " + flags);
+}
+
+macro "Colour Picker [c]"{
+	getCursorLoc(x, y, z, flags);
+	pxVal = getPixel(x,y);
+	setForegroundColor(pxVal);
+	//print("x: " + x + " y: " + y + " col: " + getPixelValue(x,y));
+}
+
+macro "Next Frame [g]"{
+	setBatchMode(true);
+	imID = getImageID();
+	sliceN = getSliceNumber();
+	if(sliceN < nSlices){
+	run("Remove Overlay");
+	if(isOpen("Stack") == true){
+		selectImage("Stack");
+		setSlice(sliceN+1);
+		selectImage(imID);
+		setSlice(sliceN+1);
+		run("Add Image...", "image=Stack x=0 y=0 opacity=50");
+		setBatchMode("show");
+	}
+	}
+}
+
+macro "Prev Frame [d]"{
+	setBatchMode(true);
+	imID = getImageID();
+	sliceN = getSliceNumber();
+	if(sliceN > 1){
+	run("Remove Overlay");
+	if(isOpen("Stack") == true){
+		selectImage("Stack");
+		setSlice(sliceN-1);
+		selectImage(imID);
+		setSlice(sliceN-1);
+		run("Add Image...", "image=Stack x=0 y=0 opacity=50");
+		setBatchMode("show");
+	}
+	}
+}
+
+
+

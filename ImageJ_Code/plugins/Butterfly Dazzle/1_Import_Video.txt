@@ -1,0 +1,53 @@
+maxFrames = 400;
+
+dir = getDirectory("Choose a Directory");
+
+setBatchMode(true);
+
+list = getFileList(dir);
+frameList = newArray(0);
+
+for(i=0; i<list.length; i++)
+	if(endsWith(list[i], ".DNG") == true)
+		frameList = Array.concat(frameList, list[i]);
+
+str = "open=" + dir + frameList[0] + " use_temporary_directory white_balance=[Camera white balance] output_colorspace=sRGB read_as=8-bit interpolation=[High-speed, low-quality bilinear]";
+
+run("DCRaw Reader...", str);
+w=getWidth();
+h=getHeight();
+
+run("Select All");
+run("Copy");
+close();
+
+if(frameList.length < maxFrames)
+	maxFrames = frameList.length;
+
+newImage("Stack", "RGB black", w, h, maxFrames);
+run("Paste");
+
+//for(i=1; i<frameList.length; i++){
+for(i=1; i<maxFrames; i++){
+	str = "open=" + dir + frameList[i] + " use_temporary_directory white_balance=[Camera white balance] output_colorspace=sRGB read_as=8-bit interpolation=[High-speed, low-quality bilinear]";
+	run("DCRaw Reader...", str);
+	run("Select All");
+	run("Copy");
+	close();
+	selectImage("Stack");
+	setSlice(i+1);
+	run("Select All");
+	run("Paste");
+}
+
+setBatchMode("show");
+rename("Stack");
+
+
+
+
+
+
+
+
+

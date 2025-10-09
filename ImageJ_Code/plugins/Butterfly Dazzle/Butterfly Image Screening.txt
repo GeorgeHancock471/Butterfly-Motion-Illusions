@@ -1,0 +1,20 @@
+
+
+imDir = getDirectory("chose directory");
+
+imList = getFileList(imDir);
+
+tifList = newArray();
+
+for(i=0; i<imList.length; i++)
+	if(endsWith(imList[i], ".tif") == 1)
+		tifList = Array.concat(tifList, imList[i]);
+
+
+for(i=0; i<tifList.length; i++){
+	ts = imDir + tifList[i];
+	open(ts);
+	print(i);
+	waitForUser("waiting");
+	close();
+}

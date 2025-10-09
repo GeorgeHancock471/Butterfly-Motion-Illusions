@@ -1,0 +1,25 @@
+
+//px = " --python-expr \"import bpy; bpy.data.objects['Camera'].location = (9.11,-14,34.43); bpy.data.objects['Camera'].rotation_euler = (0.523599,0.261799,0); bpy.context.scene.render.frame_map_new = 50\"";
+//print(px);
+
+bDir = "/home/jolyon/Documents/Software/blender-2.81-linux-glibc217-x86_64/blender";
+dir = "/home/jolyon/TEMP/ButterflyDazzle/";
+
+ts = dir + "ButterflyRendering.blend";
+ts2 = dir + "butterflyRender.py";
+
+exec(bDir, "-b", ts, "-P", ts2, "-a");
+
+
+// --python-expr "bpy.data.objects['Camera'].location = (9.11,-14,34.43); bpy.data.objects['Camera'].rotation_euler = (0.523599,0.261799,0)"
+
+
+// the below works in command line:
+//      /home/jolyon/Documents/Software/blender-2.81-linux-glibc217-x86_64/blender -b /home/jolyon/TEMP/ButterflyDazzle/ButterflyRendering.blend --python-expr "import bpy; bpy.data.objects['Camera'].location = (9.11,-14,34.43); bpy.data.objects['Camera'].rotation_euler = (0.523599,0.261799,0); bpy.context.scene.render.frame_map_new = 50" -a 
+
+// works to use python script file:
+// /home/jolyon/Documents/Software/blender-2.81-linux-glibc217-x86_64/blender -b /home/jolyon/TEMP/ButterflyDazzle/ButterflyRendering.blend -P /home/jolyon/TEMP/ButterflyDazzle/butterflyRender.py -a
+
+//ts = "/home/jolyon/Documents/Software/blender-2.81-linux-glibc217-x86_64/blender -b /home/jolyon/TEMP/ButterflyDazzle/ButterflyRendering.blend --python-expr \"import bpy; bpy.data.objects['Camera'].location = (9.11,-14,34.43); bpy.data.objects['Camera'].rotation_euler = (0.523599,0.261799,0); bpy.context.scene.render.frame_map_new = 50\" -a";
+//print(ts);
+//exec(ts);

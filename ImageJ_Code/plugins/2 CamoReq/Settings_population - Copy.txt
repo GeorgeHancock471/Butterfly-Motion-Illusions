@@ -1,0 +1,7 @@
+Target=	Papilio_Template
+blank
+blank
+blank
+blank
+blank
+ColourSpace =		0	100	0	0	0	0

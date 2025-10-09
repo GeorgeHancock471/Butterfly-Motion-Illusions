@@ -1,0 +1,90 @@
+/*
+average of all collins butterflies is 76, which is used for blender rendering background
+
+
+*/
+
+
+
+//-------------------Variables--------------------
+//iDir = "/home/jolyon/TEMP/ButterflyDazzle/inputImages/";
+iDir = "/home/jolyon/Documents/Work/Butterfly Dazzle/Butterfly Wings/Collins_ButterflyScans/processed/";
+
+
+sG = 2; // spatial Gaussian blur sigma (low pass only)
+tG = 5; // temporal blur
+
+pxmm = 23.583; // measured using the same scanner as the butterfly book
+
+
+//----------------------------------------------------
+
+setBatchMode(true);
+
+
+butterflyList = getFileList(iDir);
+
+for(k=0; k<butterflyList.length; k++){
+
+ts = iDir + butterflyList[k];
+open(ts);
+
+//imageName = getTitle();
+imageName = butterflyList[k];
+imageName = replace(imageName, ".tif", "");
+
+
+run("To ROI Manager");
+
+
+//-------------------Convert to cone-catch----------------
+// outputs bluetit linear double-cone cone catch instead of colour image
+oID = getImageID();
+run("RGB Stack");
+run("32-bit");
+
+run("Linearisation Function", "equation=[JT Linearisation] a=252.285282435 b=1.294312365 c=0.001217645 d=0.028759277 slice=1");
+run("Linearisation Function", "equation=[JT Linearisation] a=252.285282435 b=1.294312365 c=0.001217645 d=0.028759277 slice=2");
+run("Linearisation Function", "equation=[JT Linearisation] a=252.285282435 b=1.294312365 c=0.001217645 d=0.028759277 slice=3");
+
+run("Butterfly Scanner Linear Bluetit LMS D65 ");
+tID = getImageID();
+setMinAndMax(0.0, 0.92);
+setSlice(4);
+run("Duplicate...", "use");
+run("8-bit");
+run("RGB Color");
+cID = getImageID();
+
+
+selectImage(oID);
+close();
+selectImage(tID);
+close();
+selectImage(cID);
+//-------------------------End cone catch----------------------
+
+//waitForUser("waiting");
+
+run("Select None");
+
+//------------select wings-------
+
+roiManager("Select", newArray(0,1));
+roiManager("Combine");
+getStatistics(wingArea, mean, min, max, sd);
+
+row = nResults();
+
+setResult("Label", row, imageName);
+setResult("area", row, wingArea);
+setResult("mean", row, mean);
+setResult("sd", row, sd);
+
+close();
+
+}//k
+
+
+
+

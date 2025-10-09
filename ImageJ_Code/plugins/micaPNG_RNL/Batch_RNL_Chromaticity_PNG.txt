@@ -1,0 +1,1567 @@
+/*__________________________________________________________________
+
+	Title: Batch RNL Chromaticity Analyses
+	''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+	Authors: George Hancock 
+	Date: 20/12/2023
+............................................................................................................
+
+This script batch analyses mspec images using a variety of measures for the luminance and RNL chromaticity channels.
+___________________________________________________________________
+*/
+
+setBatchMode(false);
+
+TestMode = 0; // Allows for testing without loopping, disables batch mode.
+
+channelNames=newArray("X","Y","Z");
+
+
+
+
+// Index
+//---------------------------------------------------
+// Allows you to obtain the index of a Value within an Array.
+
+  function index(a, value) {
+      for (i=0; i<a.length; i++)
+          if (a[i]==value) return i;
+      return -1;
+  }
+
+close("*");
+
+imageDIR = getDirectory("Directory: Select a 'folder of mspecs' or 'folder of mspec folders'");
+
+fileList=getFileList(imageDIR);
+StartPosition = 0;
+
+
+labelsDIR = imageDIR +"labels.txt";
+
+
+// ROI
+//---------------------------------------------------
+function 	roiGetList(String1){
+
+roiList1 = newArray();
+roiLocs1 = newArray();
+roiFullList1 = newArray();
+nROIs1 = roiManager("count");
+
+for(j=0; j<nROIs1; j++){
+	roiManager("Select", j);
+	tStr = getInfo("selection.name");
+	roiFullList1 = Array.concat(roiFullList1, tStr);
+	if(tStr == String1){
+		roiList1 = Array.concat(roiList1, tStr);
+		roiLocs1= Array.concat(roiLocs1, j);
+		}
+	}
+
+return roiLocs1;
+}
+
+
+
+
+
+// LISTING CONE CATCH MODELS
+
+	modelPath = getDirectory("plugins")+"Cone Models";
+
+	modelList=getFileList(modelPath);
+
+	modelNames = newArray();
+
+	for(i=0; i<modelList.length; i++){
+		if(endsWith(modelList[i], ".class")==1)
+			modelNames = Array.concat(modelNames,replace(modelList[i],".class",""));
+		if(endsWith(modelList[i], ".CLASS")==1)
+			modelNames = Array.concat(modelNames,replace(modelList[i],".CLASS",""));
+	}
+	
+	for(i=0; i<modelNames.length; i++)
+		modelNames[i] = replace(modelNames[i], "_", " ");
+
+
+
+// LIST VISUAL SYSTEM WEBER FRACTIONS
+
+	vsPath = getDirectory("plugins")+"micaToolbox/weberFractions";
+	vsList=getFileList(vsPath);
+	vsNames = newArray();
+	vsNames = Array.concat("Custom", vsNames);
+
+	for(i=0; i<vsList.length; i++){
+		if(endsWith(vsList[i], ".txt")==1)
+			vsNames = Array.concat(vsNames,replace(vsList[i],".txt",""));
+		if(endsWith(vsList[i], ".TXT")==1)
+			vsNames = Array.concat(vsNames,replace(vsList[i],".TXT",""));
+	}
+		
+		
+
+		
+
+// Arrays for settings
+//---------------------------------------------------
+
+lumChannelArray = newArray("dbl", "lw", "lw mw", "x", "x y", "mw"); // luminance channel options
+
+yesNo=newArray("No","Yes"); // alternative checkbox
+
+folderOrganisations=newArray("Single MSPEC Folder","Multiple MSPEC Folders"); // file organisation
+
+orientationArray=newArray("DoG","Gabor2","Gabor4","Gabor6");
+
+octaveScaling=newArray("SetScale","ROI_Area","ROI_Major","ROI_Minor");
+
+
+
+//Load Previous Values
+//---------------------------------------------------
+
+settingsFilePath = getDirectory("plugins") + "micaPNG_RNL/Batch_Settings.txt";
+
+if(File.exists(settingsFilePath) == 1){
+
+	settingsString=File.openAsString(settingsFilePath);	// open txt data file
+	defaultSettings=split(settingsString, "\n");
+	
+} else defaultSettings = newArray( // Settings
+"Single MSPEC Folder", // Settings
+modelNames[0],
+lumChannelArray[0],
+vsNames[0],
+"No",
+8,
+1000,
+"None",
+"None",				 // Measures
+"Yes",
+"Yes",
+"Yes",
+"No",
+"No",
+"No",
+"AllRois",
+"No",
+"No",
+"AllRois",
+"No",
+"No",
+"DoG",
+"AllRois",
+4,				// GabRat
+3.0,
+1.0,
+2.0,
+6,					// Patterns
+0,
+"SetScale",
+10,
+"Target",
+"Current",
+0,
+1);
+
+
+
+
+// Dialogue 1
+//...................
+
+// File settings, visual models and acuity view.
+//defaultSettings 0-8
+
+Dialog.create("Settings:");
+	Dialog.addMessage("Settings 1, assign folder layout \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addChoice("Organisation, All in one folder or multiple folders?",folderOrganisations,defaultSettings[0]); 
+	Dialog.addChoice("StartFolder, Which folder to beign with", fileList, fileList[0]); 
+	Dialog.addChoice("EndFolder, Which folder to end with", fileList, fileList[fileList.length-1]); 
+
+	Dialog.addMessage("Settings 2, assign model settings \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addChoice("ConeCatch, camera & cone model",modelNames, defaultSettings[1]);
+	Dialog.addChoice("LumChannel, assign channel",lumChannelArray, defaultSettings[2]);
+	Dialog.addChoice("WeberFraction, assign fractions",vsNames, defaultSettings[3]);
+
+	Dialog.addMessage("Settings 3, acuity settings \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addChoice("AcuityView, should acuity view be enabled",yesNo, defaultSettings[4]);
+	Dialog.addNumber("visual-Acuity, the acuity of the animal in cp/d", parseFloat(defaultSettings[5]));
+	Dialog.addNumber("view-distance, the viewing distance in mm", parseFloat(defaultSettings[6]));
+
+	Dialog.addMessage("Settings 4, additional settings \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addString("PreScript, e.g., 'Create Background ROIs'. 'None' if no scipt", defaultSettings[7], 30);
+	Dialog.addString("CropROI, type 'None' if none to crop", defaultSettings[8], 30);
+Dialog.show();
+
+
+// Obtain Settings
+//
+
+FileStructure = Dialog.getChoice(); // 0
+
+startFolder = Dialog.getChoice();
+		startIndex = index(fileList,startFolder);
+		StartPosition=startIndex;
+		
+endFolder = Dialog.getChoice();
+		endIndex = index(fileList,endFolder);
+		EndPosition=endIndex;
+
+coneMethod = Dialog.getChoice(); 	// 1
+lumMethod  = Dialog.getChoice(); 	// 2	
+webMethod  = Dialog.getChoice(); 	// 3
+
+
+useView = Dialog.getChoice(); 		// 4
+acuity = Dialog.getNumber(); 		// 5
+distanceView = Dialog.getNumber(); 	// 6
+
+Prescript = Dialog.getString();		// 7
+Prescript = replace(Prescript,"_"," ");
+Prescript = replace(Prescript,".txt","");
+
+
+CropROI = Dialog.getString();		// 8
+
+
+
+
+
+// Dialogue 2
+//...................
+
+// Measures
+//defaultSettings 9-22
+
+Dialog.create("Measures:");
+	Dialog.addMessage("Measures 1, Basic Measures for luminance and colour channels \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addMessage("Remember for luminance difference calculations you must apply follow Siddiqi et al 2004, JND = abs(log(aVals/bVals)/weberFraction); \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addChoice("Mean",yesNo, defaultSettings[9]);
+	Dialog.addChoice("Standard Deviation",yesNo, defaultSettings[10]);
+	Dialog.addChoice("Mode",yesNo, defaultSettings[11]);
+	Dialog.addChoice("Min",yesNo, defaultSettings[12]);
+	Dialog.addChoice("Max",yesNo, defaultSettings[13]);
+	Dialog.addChoice("Kurtosis",yesNo, defaultSettings[14]);
+	Dialog.addString("BaseROIs, 'AllRois' if all barring scalebar", defaultSettings[15], 30);
+
+	Dialog.addMessage("Measures 2, GabRat Measures for luminance and colour channels \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addChoice("GabRat_Luminance",yesNo, defaultSettings[16]);
+	Dialog.addChoice("GabRat_Colour",yesNo, defaultSettings[17]);
+	Dialog.addString("GabRat_ROIs, 'AllRois' if all barring scalebar", defaultSettings[18], 30);
+
+	Dialog.addMessage("Measures 3, Spatial Measures \n ------------------------------------------------------------------------------------------------------------------");
+	Dialog.addChoice("Pattern_Luminance",yesNo, defaultSettings[19]);
+	Dialog.addChoice("Pattern_Colour",yesNo, defaultSettings[20]);
+	Dialog.addChoice("Pattern_Orientation", orientationArray, defaultSettings[21]);
+	Dialog.addString("Pattern_ROIs, 'AllRois' if all barring scalebar", defaultSettings[22], 30);
+Dialog.show();
+
+// Obtain Measures
+//
+
+//Simple
+
+MsMean = Dialog.getChoice(); 		// 9
+MsStdDev = Dialog.getChoice(); 		// 10
+MsMode = Dialog.getChoice(); 		// 11
+MsMin = Dialog.getChoice(); 		// 12
+MsMax = Dialog.getChoice(); 		// 13
+MsKurt = Dialog.getChoice(); 		// 14
+
+MsROIListStr =  Dialog.getString();  	// 15
+ROIListStr = replace(MsROIListStr,", ",",");
+MsROIList =  split(ROIListStr,",");
+
+//GabRat
+
+LumGab = Dialog.getChoice(); 		// 16
+ColGab = Dialog.getChoice(); 		// 17
+
+GabROIListStr =  Dialog.getString();  	// 18
+ROIListStr = replace(GabROIListStr,", ",",");
+GabROIList =  split(ROIListStr,",");
+
+
+
+//Pattern
+
+LumPat = Dialog.getChoice(); 		// 19
+ColPat = Dialog.getChoice(); 		// 20
+
+PatMethod = Dialog.getChoice(); 	// 21
+
+PatROIListStr =  Dialog.getString();  	// 22
+ROIListStr = replace(PatROIListStr,", ",",");
+PatROIList =  split(ROIListStr,",");
+
+
+//Spatial Patters
+
+
+// Dialogue 3
+//...................
+// GabRat, only run if pattern equals yes.
+//defaultSettings 23-27
+
+if(LumGab=="Yes" ||  ColGab=="Yes"){
+
+
+Dialog.create("GabRat:");
+	Dialog.addMessage("GabRat-Settings \n ............................");
+	Dialog.addNumber("Number of angles", parseFloat(defaultSettings[23]));
+	Dialog.addNumber("Sigma", parseFloat(defaultSettings[24]));
+	Dialog.addNumber("Gamma aspect ratio", parseFloat(defaultSettings[25]));
+	Dialog.addNumber("Frequency", parseFloat(defaultSettings[26]));
+Dialog.show();
+
+angles = Dialog.getNumber();
+sigma = Dialog.getNumber();
+gamma = Dialog.getNumber();
+freq = Dialog.getNumber();
+
+} else {
+
+angles = defaultSettings[23];
+sigma = defaultSettings[24];
+gamma = defaultSettings[25];
+freq = defaultSettings[26];
+
+
+}
+
+// Dialogue 4
+//...................
+
+// Pattern, only run if pattern equals yes.
+//defaultSettings 27-31
+
+if(LumPat=="Yes" ||  ColPat=="Yes"){
+
+Dialog.create("Octaves:");
+	Dialog.addMessage("Spatial-Settings \n ............................");
+	Dialog.addNumber("N_Octaves", parseFloat(defaultSettings[27]), 0, 10,"");
+	Dialog.addNumber("Offset_Octaves", parseFloat(defaultSettings[28]), 0, 10,"");
+	Dialog.addChoice("ScaleMethod", octaveScaling, defaultSettings[29]);
+	Dialog.addNumber("MeasuredScale, if 'SetScale'", parseFloat(defaultSettings[30]),  0, 10,"mm");
+	Dialog.addString("ROI_Scale, if ROI method", defaultSettings[31], 30);
+	Dialog.addString("ROI_Bounds, type 'None' if no crop, 'Current' if measure ROI", defaultSettings[32], 30);
+Dialog.show();
+
+nOctaves =  Dialog.getNumber(); 
+offset =  Dialog.getNumber(); 
+scMethod = Dialog.getChoice();
+wlO = Dialog.getNumber();
+wlROI = Dialog.getString();
+DoGROI = Dialog.getString();
+
+} else {
+
+
+nOctaves =  defaultSettings[27];
+offset =  defaultSettings[28];
+scMethod = defaultSettings[29];
+wlO = defaultSettings[30];
+wlROI = defaultSettings[31];
+DoGROI = defaultSettings[32];
+}
+
+
+// Dialogue 5
+//...................
+
+Dialog.create("BonusSettings:");
+	Dialog.addMessage("TestMode \n ............................");
+	Dialog.addMessage("Setting test mode to true will cause it to only open 1 file and to show all images ");
+	Dialog.addCheckbox("TestMode (Only enable if you don't wish to run analyses)",defaultSettings[33]);
+	
+	Dialog.addMessage("DeleteExisting \n ............................");
+	Dialog.addCheckbox("Delete (Only disable if you need to append more)",defaultSettings[34]);
+	
+	Dialog.addMessage("Output Label \n ............................");
+	Dialog.addString("Label", webMethod, 30);
+Dialog.show();
+
+TestMode = Dialog.getCheckbox();
+DeleteOld = Dialog.getCheckbox();
+labelN = Dialog.getString();
+
+// Save Values
+//---------------------------------------------------
+dataFile = File.open(settingsFilePath);
+
+//1
+
+	print(dataFile, FileStructure);
+	print(dataFile, coneMethod);
+	print(dataFile, lumMethod);
+	print(dataFile, webMethod);
+	print(dataFile, useView);
+	print(dataFile, acuity);
+	print(dataFile, distanceView);
+	print(dataFile, Prescript);
+	print(dataFile, CropROI);
+	
+//2
+
+	print(dataFile, MsMean);
+	print(dataFile, MsStdDev);
+	print(dataFile, MsMode);
+	print(dataFile, MsMin);
+	print(dataFile, MsMax);
+	print(dataFile, MsKurt);
+	print(dataFile, MsROIListStr);
+
+	print(dataFile, LumGab);
+	print(dataFile, ColGab);
+	print(dataFile, GabROIListStr);
+	
+	print(dataFile, LumPat);
+	print(dataFile, ColPat);
+	print(dataFile, PatMethod);	
+	print(dataFile, PatROIListStr);
+
+	
+//3	
+
+	print(dataFile, angles);
+	print(dataFile, sigma);
+	print(dataFile, gamma);	
+	print(dataFile, freq);
+
+	
+//4	
+	
+	print(dataFile, nOctaves);
+	print(dataFile, offset);
+	print(dataFile, scMethod);	
+	print(dataFile, wlO);
+	print(dataFile, wlROI);	
+	print(dataFile, DoGROI);
+	
+//5
+	print(dataFile, TestMode);
+	print(dataFile, DeleteOld);
+
+File.close(dataFile);
+
+
+
+
+//Tables
+//__________________________________________________________________________________
+Table.create("Progress Table");
+selectWindow("Progress Table");
+
+getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, second, msec);
+
+dhour = toString(hour);
+if(lengthOf(dhour)==1)dhour=toString(0)+toString(dhour);
+
+dminute = toString(minute);
+if(lengthOf(dminute)==1)dminute=toString(0)+toString(dminute);
+
+startTime = getTime();
+Table.set("Start_Time",0,toString(dhour+":"+dminute));
+Table.set("TimePerMSPEC_(Min)",0,"N/A");
+Table.set("Estimated_Duration_(Min)",0,"N/A");
+
+Table.set("Estimated_End_Time",0,"N/A");
+
+Table.set("Time_Remaining_(Min)",0,"N/A");
+
+
+Table.set("Current_File",0,"File_"+0);
+
+Table.set("Current_Stage",0,"N/A");
+Table.update;
+//__________________________________________________________________________________
+
+
+
+
+
+// SaveNames
+//---------------------------------------------------
+
+fileSaveTitle = "Batch_RNL_"+labelN;
+
+fileSaveDIR_Simple = imageDIR + fileSaveTitle+"_Simple.txt";
+fileSaveDIR_GabRat = imageDIR + fileSaveTitle+"_GabRat.txt";
+fileSaveDIR_Pattern = imageDIR + fileSaveTitle+"_Pattern.txt";
+
+printCheckSimple=0;
+printCheckGabRat=0;
+printCheckPattern=0;
+
+if(DeleteOld==1){
+if(File.exists(fileSaveDIR_Simple)) File.delete(fileSaveDIR_Simple);
+if(File.exists(fileSaveDIR_GabRat)) File.delete(fileSaveDIR_GabRat);
+if(File.exists(fileSaveDIR_Pattern)) File.delete(fileSaveDIR_Pattern);
+}
+
+
+if(File.exists(fileSaveDIR_Simple)) printCheckSimple=1;
+if(File.exists(fileSaveDIR_GabRat)) printCheckGabRat=1;
+if(File.exists(fileSaveDIR_Pattern)) printCheckPattern=1;
+
+
+// Organise ROI lists
+//---------------------------------------------------
+
+MsAllGate=0;
+if(MsROIList[0]=="AllRois") MsAllGate=1;
+
+
+GabAllGate=0;
+if(GabROIList[0]=="AllRois") GabAllGate=1;
+
+PatAllGate=0;
+if(PatROIList[0]=="AllRois") PatAllGate=1;
+
+
+// Create ConeCatch Conversion String
+//---------------------------------------------------
+
+coneString="model=["+coneMethod+"] desaturate desaturation=0.010 remove replace=0.001";
+
+
+// File Structures
+//---------------------------------------------------
+
+if(FileStructure=="Single MSPEC Folder"){
+StartPosition=0;
+EndPosition=0;
+}
+
+
+
+setBatchMode(false);
+
+nMspecs=0;
+
+// Count Number of MSPECs
+//---------------------------------------------------
+
+for(j=StartPosition; j<=EndPosition; j++){
+
+if(FileStructure=="Multiple MSPEC Folders") fileList2=getFileList( imageDIR + fileList[j] );
+
+if(FileStructure=="Single MSPEC Folder") fileList2=getFileList( imageDIR );
+
+for(i=0; i<fileList2.length; i++){ // list only mspec files
+	if(endsWith(fileList2[i], ".mspec")==1) nMspecs+=1;
+}
+}
+
+timeTakenArray=newArray();
+
+Fn=0;
+
+// Start Loop
+//---------------------------------------------------
+
+for(j=StartPosition; j<=EndPosition; j++){	// Loop Through Folders
+
+	close("*");
+
+	
+	
+
+	if(FileStructure=="Multiple MSPEC Folders") fileList2=getFileList( imageDIR + fileList[j] );
+
+	if(FileStructure=="Single MSPEC Folder") fileList2=getFileList( imageDIR );
+
+
+		mspecList=newArray();
+
+		for(i=0; i<fileList2.length; i++){ // list only mspec files
+			if(endsWith(fileList2[i], ".mspec")==1) mspecList = Array.concat(mspecList, fileList2[i]);
+		}
+
+	for(nm=0; nm<mspecList.length; nm++){	//Loop Through MSPECs in folders (can do multiple per folder)
+
+	mspecStart = getTime();
+	
+	Fn+=1;
+	
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_File",0,"File "+Fn+" | "+toString(nMspecs));
+Table.set("Current_Stage",0,"Open_MSPEC");
+Table.update;
+//__________________________________________________________________________________
+
+
+	
+
+	setBatchMode(false);
+
+		// Load Images
+		//===============================================
+		if(FileStructure=="Multiple MSPEC Folders")imageString = "select=[" +  imageDIR + fileList[j] + mspecList[nm] + "] image=[Linear Normalised Reflectance Stack]"; //Load MSPEC
+		if(FileStructure=="Multiple MSPEC Folders")roiString = imageDIR + fileList[j] + replace(mspecList[nm],".mspec",".zip");
+		if(FileStructure=="Single MSPEC Folder")imageString = "select=[" +  imageDIR  + mspecList[nm] + "] image=[Linear Normalised Reflectance Stack]"; //Load MSPEC
+		if(FileStructure=="Single MSPEC Folder")roiString = imageDIR + replace(mspecList[nm],".mspec",".zip");
+
+		setPasteMode("Copy"); //Mspecs break if paste mode isn't copy
+		
+		run(" Load Multispectral Image", imageString);
+		imgName = getTitle();
+		rename("MSPEC_BASE");
+
+
+
+		if(Prescript != "None"){
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"PreScript");
+Table.update;
+//__________________________________________________________________________________
+		
+			run(Prescript);
+		}
+
+
+		// Make sure all ROIs are in bounds
+		//===============================================
+		nROI = roiManager("count");
+		run("Select All");
+		roiManager("Add");
+
+		for(i=0;i<nROI;i++){
+			roiManager("select", 0);
+			selName = getInfo("selection.name");
+			roiManager("select", newArray(0,nROI-i));
+			roiManager("AND");
+			roiManager("Add");
+			roiManager("select", roiManager("count")-1);
+			roiManager("rename",selName);
+			roiManager("select",0);
+			roiManager("delete");
+		}
+
+		roiManager("select",0);
+		roiManager("delete");
+
+
+		// Find the Scalebar
+		//===============================================
+		nSelections = roiManager("count");
+			scaleFlag = 0;
+			for(i=0; i<nSelections; i++){
+				roiManager("select", i);
+				selName = getInfo("selection.name");
+				if( startsWith(selName, "Scale") == 1){ // found the scale bar - extract the info
+					scaleLoc = i;
+					scaleFlag = 1;
+					scaleInfo = split(selName, ":");
+					pixLength = scaleInfo[1];
+					scaleMm = scaleInfo[2];
+				}	
+			}//i
+
+
+		scaleValOld = parseFloat(pixLength)/parseFloat(scaleMm); // Used for acuity view
+		
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"ConeCatch Conversion");
+Table.update;
+//__________________________________________________________________________________
+		
+		
+		
+		// Cone Catch COnversion
+		//===============================================
+
+
+		run("Select None");
+
+		run("Convert to Cone Catch", coneString);
+
+		if(lumMethod != "dbl"){
+		run("Create Luminance Channel", lumMethod);	// If there is no double cone you will need to make a luminance channel
+		wait(5);
+		}
+		
+		
+
+		
+
+		// Acuity View
+		//===============================================
+
+		if(useView=="Yes"){
+		
+		//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"Acuity View");
+Table.update;
+//__________________________________________________________________________________
+		
+		
+		
+		AcuityString = "acuity=[Cycles per degree] acuity_0="+acuity+" method=[Viewing distance] distance="+distanceView+" rescale=5";
+		run("Acuity View", AcuityString);
+		}
+		
+		img=getTitle();
+				
+
+				// Crop
+		//===============================================
+		
+		if(CropROI != "None"){
+		noROIfound=1;
+		for(i=0; i<nSelections; i++){
+				roiManager("select", i);
+				selName = getInfo("selection.name");
+				if( startsWith(selName, CropROI ) == 1){ // found the scale bar - extract the info
+				Roi.getBounds(x1, y1, width1, height1);
+				run("Crop");
+				roiManager("select", i);
+				Roi.move(x1,y1);
+				roiManager("update");
+				run("Select None");
+				i = nSelections;
+				noROIfound=0;
+				}	
+			}//i
+		
+		if(noROIfound==0){
+		for(i=0; i<nSelections; i++){
+				roiManager("select", i);
+				Roi.getBounds(x, y, width, height);
+				Roi.move(x-x1,y-y1);
+				Roi.getBounds(x, y, width, height);
+				if(x<0||y<0||x+width>getWidth()||y+height>getHeight()) Roi.move(0,0);
+				roiManager("update");
+				
+			}//i
+		}
+		
+		
+		
+		}
+
+
+		// Measure the Scalebar Post Acuity View
+		//===============================================
+
+
+		roiManager("select", scaleLoc);
+		getStatistics(area);
+
+		scaleVal = parseFloat(area)/parseFloat(scaleMm);
+		
+		
+		
+		// Create RNL Channels
+		//===============================================
+		rename("ConeCatch");
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"RNL Channels");
+Table.update;
+//__________________________________________________________________________________
+		
+				
+
+		tStr = "visual=["+webMethod+"]";
+		run("Cone Catch to RNL Chromaticity",tStr );
+
+		rename("RNL");
+
+		selectImage("ConeCatch");
+		setSlice(nSlices);
+		run("Select None");
+		run("Duplicate...", "title=LUM");
+
+
+		selectImage("RNL");
+
+		nSelections= roiManager("count");
+		
+		rnlNames=newArray();
+		for(i=0;i<nSlices-1;i++){
+		rnlNames=Array.concat(rnlNames,channelNames[i]);
+		}
+		
+		rnlNames=Array.concat(rnlNames,"Sat");
+		
+		
+		if(TestMode==0){
+		setBatchMode(true);
+		selectImage("LUM"); setBatchMode("hide");
+		selectImage("RNL"); setBatchMode("hide");
+		}
+		
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"Simple Measures");
+Table.update;
+//__________________________________________________________________________________
+		
+		
+
+
+		// Simple Measures
+		//...............................................
+		//...............................................
+		
+saveTitles = newArray("FILE","MSPEC","ROI","Area","Area_mm2","Major_mm","Minor_mm");
+		
+		// ROI Indexes
+		//===============================================
+			
+		if(MsAllGate==0){
+		MsROIindexes=newArray();
+
+		for(i=0;i<MsROIList.length;i++){
+		temp = roiGetList(MsROIList[i]);
+		MsROIindexes=Array.concat(MsROIindexes,temp);
+		}
+		
+		} else {
+		
+		MsROIindexes=newArray();
+
+		for(i=0;i<roiManager("count");i++){
+		roiManager("select",i);
+		tStr = getInfo("selection.name");
+		if(!startsWith(tStr,"Scale")) MsROIindexes=Array.concat(MsROIindexes,i); //All barring scalebar
+		}
+		
+		
+		}
+
+		
+		// Repeat for ROIs
+		//===============================================
+		
+		
+		
+		for(X=0;X<MsROIindexes.length;X++){
+		if(MsROIindexes.length>0){
+		
+			roiInd=MsROIindexes[X];
+			roiManager("select", roiInd);
+			roi=getInfo("selection.name");
+			getStatistics(area);
+			major = getValue("Major");
+			minor = getValue("Minor");
+			
+			MeasuresArray=newArray(fileList[j],imgName,roi,area,area/scaleVal,major/scaleVal,minor/scaleVal);
+			
+			
+		
+			// Luminance Channel
+			//..................
+			
+			selectImage("LUM");
+			roiManager("select", roiInd);
+			getStatistics(area,mean,min,max,dev);
+			
+				//Mean
+				if(MsMean=="Yes"){
+				title = "L_Mean";
+				V=mean;
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+				}
+				
+				//StdDev
+				if(MsStdDev=="Yes"){
+				title = "L_StdDev";
+				V=dev;
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+				}		
+			
+				//Mode
+				if(MsMode=="Yes"){
+				title = "L_Mode";
+				V=getValue("Mode");
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+				}		
+			
+				//Min
+				if(MsMin=="Yes"){
+				title = "L_Min";
+				V=getValue("Min");
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+				}
+
+				//Max
+				if(MsMax=="Yes"){
+				title = "L_Max";
+				V=getValue("Max");
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+				}		
+			
+				//Kurt
+				if(MsKurt=="Yes"){
+				title = "L_Kurt";
+				V=getValue("Kurt");
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+				}		
+		
+
+			// RNL Channels
+			//..................
+			selectImage("RNL");
+			roiInd=MsROIindexes[X];
+			roiManager("select", roiInd);
+			selectImage("RNL");
+
+				for(i=0;i<nSlices;i++){
+				
+				roiManager("select", roiInd);
+				setSlice(i+1);
+				getStatistics(area,mean,min,max,dev);
+				
+					//Mean
+					if(MsMean=="Yes"){
+					title = rnlNames[i]+"_Mean";
+					V=mean;
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+					}
+					
+					//StdDev
+					if(MsStdDev=="Yes"){
+					title = rnlNames[i]+"_StdDev";
+					V=dev;
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+					}		
+				
+					//Mode
+					if(MsMode=="Yes"){
+					title = rnlNames[i]+"_Mode";
+					V=getValue("Mode");
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+					}		
+				
+					//Min
+					if(MsMin=="Yes"){
+					title = rnlNames[i]+"_Min";
+					V=getValue("Min");
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+					}
+
+					//Max
+					if(MsMax=="Yes"){
+					title = rnlNames[i]+"_Max";
+					V=getValue("Max");
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+					}		
+				
+					//Kurt
+					if(MsKurt=="Yes"){
+					title = rnlNames[i]+"_Kurt";
+					V=getValue("Kurt");
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckSimple==0) saveTitles=Array.concat(saveTitles,title);
+					}
+				
+			
+				}
+				
+				
+		if(printCheckSimple==0){
+		saveTitleSTR = String.join(saveTitles,"\t");
+		File.append(saveTitleSTR, fileSaveDIR_Simple);
+		printCheckSimple=1;
+		}
+
+		measureSTR = String.join(MeasuresArray,"\t");
+		File.append(measureSTR, fileSaveDIR_Simple);
+				
+
+		} //exists
+		} // ROis 
+			
+		
+		
+		
+		// GabRat Measures
+		//...............................................
+		//...............................................
+		
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"GabRat Measures");
+Table.update;
+//__________________________________________________________________________________
+
+		
+	
+saveTitles = newArray("FILE","MSPEC","ROI");
+		
+		if(LumGab=="Yes"  || ColGab=="Yes"){
+		
+		// ROI Indexes
+		//===============================================
+			
+		if(GabAllGate==0){
+		GabROIindexes=newArray();
+
+		for(i=0;i<GabROIList.length;i++){
+		temp = roiGetList(GabROIList[i]);
+		GabROIindexes=Array.concat(GabROIindexes,temp);
+		}
+		
+		} else {
+		
+		GabROIindexes=newArray();
+
+		for(i=0;i<roiManager("count");i++){
+		roiManager("select",i);
+		tStr = getInfo("selection.name");
+		if(!startsWith(tStr,"Scale")) GabROIindexes=Array.concat(GabROIindexes,i); //All barring scalebar
+		}
+		
+		
+		}
+
+		
+		// Repeat for ROIs
+		//===============================================
+		
+		
+		
+		for(X=0;X<GabROIindexes.length;X++){
+		if(GabROIindexes.length>0){
+		
+			roiInd=GabROIindexes[X];
+			roiManager("select", roiInd);
+			roi=getInfo("selection.name");
+			getStatistics(area);
+			
+			MeasuresArray=newArray(fileList[j],imgName,roi);
+			
+			
+		
+			// Luminance Channel
+			//..................
+			if(LumGab=="Yes"){
+			selectImage("LUM");
+			roiManager("select", roiInd);
+			
+				title = "L_GabRat";
+				run("GabRat Disruption", "number_of_angles=&angles sigma=&sigma gamma=&gamma frequency=&freq label=&tStr2");
+				V=getResult("GabRat",nResults-1);
+				MeasuresArray=Array.concat(MeasuresArray,V);
+				if(printCheckGabRat==0) saveTitles=Array.concat(saveTitles,title);
+				
+			}
+			
+		
+
+			// RNL Channels
+			//..................
+			if(ColGab=="Yes"){
+			selectImage("RNL");
+			roiInd=GabROIindexes[X];
+			roiManager("select", roiInd);
+			selectImage("RNL");
+
+				for(i=0;i<nSlices;i++){
+				
+				roiManager("select", roiInd);
+				setSlice(i+1);
+				
+				
+					title = rnlNames[i]+"_GabRat";
+					run("GabRat Disruption", "number_of_angles=&angles sigma=&sigma gamma=&gamma frequency=&freq label=&tStr2");
+					gab=getResult("GabRat",nResults-1);
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckGabRat==0) saveTitles=Array.concat(saveTitles,title);
+					
+				
+			
+				}
+			}
+				
+		if(printCheckGabRat==0){
+		saveTitleSTR = String.join(saveTitles,"\t");
+		File.append(saveTitleSTR, fileSaveDIR_GabRat);
+		printCheckGabRat=1;
+		}
+
+		measureSTR = String.join(MeasuresArray,"\t");
+		File.append(measureSTR, fileSaveDIR_GabRat);
+				
+
+		} //exists
+		} // ROis 		
+		} //Gab
+		
+
+		
+		// Patterns
+		//...............................................
+		//...............................................
+		
+		if(LumPat=="Yes"  || ColPat=="Yes"){
+
+saveTitles = newArray("FILE","MSPEC","ROI","Scaled_Area");
+
+
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+Table.set("Current_Stage",0,"Pattern Measures");
+Table.update;
+//__________________________________________________________________________________
+
+		
+
+
+		
+		// If using pattern metrics then rescale
+		//===============================================
+		run("Select None");
+
+		for(i=0; i<nSelections; i++){
+				roiManager("select", i);
+				selName = getInfo("selection.name");
+				if( endsWith(selName, wlROI ) == 1){ 
+				i = nSelections;
+				}	
+			}//i
+		
+		
+
+		
+		if(scMethod=="ROI_Area"){
+		getStatistics(area);
+		wl =  Math.sqrt(area);
+		}
+		
+		if(scMethod=="ROI_Area"){
+		wl = getValue("Major");
+		}
+		
+		if(scMethod=="ROI_Minor"){
+		wl = getValue("Minor");
+		}
+		
+		if(scMethod=="SetScale"){
+		wl =  wlO*scaleVal;
+		}
+		
+		minS = Math.pow(2,(nOctaves+offset));
+		rescale=minS/(wl);
+
+
+		w = getWidth();
+		h = getHeight();
+
+		w= w*(rescale);
+		h=h*(rescale);
+		run("Select None");
+		
+		selectImage("RNL");
+		run("Select None");
+		run("Size...", "width=&w height=&h constrain average interpolation=Bilinear");
+		
+		selectImage("LUM");
+		run("Select None");
+		run("Size...", "width=&w height=&h constrain average interpolation=Bilinear");
+		
+
+			for(i=0; i<nSelections; i++){
+				roiManager("select", i);
+				run("Scale... ", "x=&rescale y=&rescale");	
+				if(selectionType != -1) roiManager("Update");
+			}//i
+
+
+
+
+
+		//Get Index for Dog ROI
+		DogROIList = roiGetList(DoGROI);
+
+
+
+		// ROI Indexes
+		//===============================================
+
+
+		if(PatAllGate==0){
+		PatROIindexes=newArray();
+
+		for(i=0;i<PatROIList.length;i++){
+		temp = roiGetList(PatROIList[i]);
+		PatROIindexes=Array.concat(PatROIindexes,temp);
+		}
+		
+		} else {
+		
+		PatROIindexes=newArray();
+
+		for(i=0;i<roiManager("count");i++){
+		roiManager("select",i);
+		tStr = getInfo("selection.name");
+		if(!startsWith(tStr,"Scale")) PatROIindexes=Array.concat(PatROIindexes,i); //All barring scalebar
+		}
+		
+		
+		}
+		
+		
+		if(PatMethod=="DoG") nAng =1;
+		if(PatMethod=="Gabor2"){ nAng =2; aInt=90; }
+		if(PatMethod=="Gabor4"){ nAng =4; aInt=45;  }
+		if(PatMethod=="Gabor6"){ nAng =6; aInt=22.5;  }
+	
+
+		// Measure if ROI mode != Current
+		//===============================================
+		if(DoGROI != "Current" ){
+		
+		
+		PatArray=newArray();
+		
+		// Create Luminance Scales
+		//............................
+		if(LumPat=="Yes"){
+		selectImage("LUM");
+		if(DoGROI=="None") run("Select None");
+		if(DoGROI!="None") roiManager("select", DogROIList[0]);
+		
+
+			
+			if(PatMethod=="DoG") run("DoG ROI bandpass smooth", "sigma1=1 sigma2=2 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor2") run("Gabor ROI Bandpass Smooth", "number_of_angles=2 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor4") run("Gabor ROI Bandpass Smooth", "number_of_angles=4 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor6") run("Gabor ROI Bandpass Smooth", "number_of_angles=6 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			
+		Name = "L_Energy";
+		rename(Name);
+		PatArray= Array.concat(PatArray,Name);
+		}
+		
+		// RNL Scales
+		//............................
+		if(ColPat=="Yes"){
+		selectImage("RNL");
+		rnlN = nSlices;
+
+			for(i=0;i<rnlN;i++){
+			selectImage("RNL");
+			
+			if(DoGROI=="None") run("Select None");
+			if(DoGROI!="None") roiManager("select", DogROIList[0]);
+			
+			setSlice(i+1);
+			
+				if(PatMethod=="DoG") run("DoG ROI bandpass smooth", "sigma1=1 sigma2=2 number_of_octaves="+nOctaves+" label=Pat");
+				if(PatMethod=="Gabor2") run("Gabor ROI Bandpass Smooth", "number_of_angles=2 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+				if(PatMethod=="Gabor4") run("Gabor ROI Bandpass Smooth", "number_of_angles=4 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+				if(PatMethod=="Gabor6") run("Gabor ROI Bandpass Smooth", "number_of_angles=6 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+				
+			Name = rnlNames[i]+"_Energy";
+			rename(Name);
+			PatArray= Array.concat(PatArray,Name);
+				
+			}
+			
+		}
+		
+		if(DoGROI!="None") {
+		roiManager("select", DogROIList[0]);
+		Roi.getBounds(x1, y1, width1, height1);
+		
+
+		for(i=0; i<nSelections; i++){
+				roiManager("select", i);
+				if(selectionType != -1){
+				Roi.getBounds(x, y, width, height);
+				Roi.move(x-x1,y-y1);
+				roiManager("update");
+				}
+			}//i
+			
+		}
+		
+		// Pattern Measures
+		//............................	
+		
+		for(X=0;X<PatROIindexes.length;X++){
+		if(PatROIindexes.length>0){
+
+			
+			for(i=0;i<PatArray.length;i++){ //Repeat for all channels
+			
+			selectImage(PatArray[i]);
+			
+			roiInd=PatROIindexes[X];
+			roiManager("select", roiInd);
+			roi=getInfo("selection.name");
+			getStatistics(area);
+			MeasuresArray=newArray(fileList[j],imgName,roi,area);
+		
+			
+				for(o=0;o<nOctaves;o++){ // Repeat for n-octaves
+					for(ag=0;ag<nAng;ag++){	// Repeat for n-angles
+					setSlice(o*nAng+(ag+1));
+					
+					if(PatMethod!="DoG") title = PatArray[i]+"_"+1/Math.pow(2,(nOctaves-o-offset-1))+"_"+ag*aInt;
+					if(PatMethod=="DoG") title = PatArray[i]+"_"+1/Math.pow(2,(nOctaves-o-offset-1));
+					
+					getStatistics(area,mean,min,max,dev);
+					V=d2s(dev, 20);
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckPattern==0) saveTitles=Array.concat(saveTitles,title);
+					
+					}
+				}
+		
+		
+		if(printCheckPattern==0){
+		saveTitleSTR = String.join(saveTitles,"\t");
+		File.append(saveTitleSTR, fileSaveDIR_Pattern);
+		printCheckPattern=1;
+		}
+
+		measureSTR = String.join(MeasuresArray,"\t");
+		File.append(measureSTR, fileSaveDIR_Pattern);
+		}
+		
+		run("Select None");
+		} // If None
+		} // X
+		
+		
+		} // Not Current
+		
+
+
+
+
+
+
+
+		// Measure if ROI Mode == Current
+		//===============================================
+		
+		
+		if(DoGROI == "Current" ){
+		
+		for(X=0;X<PatROIindexes.length;X++){
+		if(PatROIindexes.length>0){
+	
+			roiInd=PatROIindexes[X];
+			roiManager("select", roiInd);
+			roi=getInfo("selection.name");
+			getStatistics(area);
+			MeasuresArray=newArray(fileList[j],imgName,roi,area);
+
+		
+		// Luminance Channel
+		//..................
+		if(LumPat=="Yes"){
+		selectImage("LUM");
+		roiManager("select", roiInd);
+		
+			if(PatMethod=="DoG") run("DoG ROI bandpass smooth", "sigma1=1 sigma2=2 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor2") run("Gabor ROI Bandpass Smooth", "number_of_angles=2 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor4") run("Gabor ROI Bandpass Smooth", "number_of_angles=4 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor6") run("Gabor ROI Bandpass Smooth", "number_of_angles=6 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			
+			roiManager("select", roiInd);
+			roiManager("Add");	
+			roiManager("select",roiManager("count")-1);
+			Roi.move(0,0);
+			roiManager("Update");
+
+			
+					for(o=0;o<nOctaves;o++){ // Repeat for n-octaves
+					for(ag=0;ag<nAng;ag++){	// Repeat for n-angles
+					setSlice(o*nAng+ag+1);
+					
+					if(PatMethod!="DoG") title = "L_Energy_"+1/Math.pow(2,(nOctaves-o-offset-1))+"_"+ag*aInt;
+					if(PatMethod=="DoG") title = "L_Energy_"+1/Math.pow(2,(nOctaves-o-offset-1));
+					
+					getStatistics(area,mean,min,max,dev);
+					V=d2s(dev, 20);
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckPattern==0) saveTitles=Array.concat(saveTitles,title);
+					rename("L_"+roi);
+					}
+				}
+				
+		roiManager("select",roiManager("count")-1);
+		roiManager("delete");
+				
+		if(TestMode==0) close();
+			
+		} //Lum
+		
+	
+
+		// RNL Channels
+		//..................
+		if(ColPat=="Yes"){
+		selectImage("RNL");
+		rnlN = nSlices;
+		
+		for(i=0;i<rnlN;i++){
+		selectImage("RNL");
+		roiManager("select", roiInd);
+		setSlice(i+1);
+			
+			if(PatMethod=="DoG") run("DoG ROI bandpass smooth", "sigma1=1 sigma2=2 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor2") run("Gabor ROI Bandpass Smooth", "number_of_angles=2 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor4") run("Gabor ROI Bandpass Smooth", "number_of_angles=4 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			if(PatMethod=="Gabor6") run("Gabor ROI Bandpass Smooth", "number_of_angles=6 sigma=2 gamma=1 frequency=3 number_of_octaves="+nOctaves+" label=Pat");
+			
+			roiManager("select", roiInd);
+			roiManager("Add");	
+			roiManager("select",roiManager("count")-1);
+			Roi.move(0,0);
+			roiManager("Update");
+				
+					for(o=0;o<nOctaves;o++){ // Repeat for n-octaves
+					for(ag=0;ag<nAng;ag++){	// Repeat for n-angles
+					roiManager("select", roiManager("count")-1);
+					setSlice(o*nAng+ag+1);
+					
+					if(PatMethod!="DoG") title = rnlNames[i]+"_Energy_"+1/Math.pow(2,(nOctaves-o-offset-1))+"_"+ag*aInt;
+					if(PatMethod=="DoG") title = rnlNames[i]+"_Energy_"+1/Math.pow(2,(nOctaves-o-offset-1));
+					
+					getStatistics(area,mean,min,max,dev);
+					V=d2s(dev, 20);
+					rename(rnlNames[i]+"_"+roi);
+					MeasuresArray=Array.concat(MeasuresArray,V);
+					if(printCheckPattern==0) saveTitles=Array.concat(saveTitles,title);
+					
+					
+					}
+					}
+					
+		roiManager("select",roiManager("count")-1);
+		roiManager("delete");
+				
+		if(TestMode==0) close();
+			
+		}
+		} // Col
+		
+		
+		
+		if(printCheckPattern==0){
+		saveTitleSTR = String.join(saveTitles,"\t");
+		File.append(saveTitleSTR, fileSaveDIR_Pattern);
+		printCheckPattern=1;
+		}
+
+		measureSTR = String.join(MeasuresArray,"\t");
+		File.append(measureSTR, fileSaveDIR_Pattern);
+		
+
+		run("Select None");
+		} // If None
+		
+
+		} // X
+		
+		
+		} // Current
+		
+		} // If Enabled
+		
+		if(TestMode==1) exit("Preview");
+	
+		if(isOpen("Exception")) close("Exception");
+		
+		
+		
+
+		
+		
+		
+		mspecEnd = getTime();
+		
+		mspecDuration = mspecEnd-mspecStart;
+		
+		timeTakenArray=Array.concat(timeTakenArray,mspecDuration);
+		Array.getStatistics(timeTakenArray, min, max, meanTime, stdDev);
+		
+		duration = meanTime/(60*1000);
+		totalDuration = nMspecs * duration;
+		remainingDuration = (nMspecs -Fn)* duration;
+		
+		addedDuration = hour*60+minute+totalDuration;
+		totalHourV = addedDuration/60;
+		totalHour = floor(totalHourV);
+		minV = parseInt((totalHourV-totalHour) *60);
+		
+		while(totalHour>=24)totalHour += -24;
+		
+		dtotalHour = toString(totalHour);
+		if(lengthOf(dtotalHour)==1)dtotalHour="0"+toString(dtotalHour);
+
+		dminV = toString(minV);
+		if(lengthOf(dminV)==1)dminV="0"+toString(dminV);
+
+		
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");	
+Table.set("TimePerMSPEC_(Min)",0,duration);
+Table.set("Estimated_Duration_(Min)",0,totalDuration);
+Table.set("Estimated_End_Time",0,toString(dtotalHour+":"+dminV));
+Table.set("Time_Remaining_(Min)",0,remainingDuration);
+Table.update;
+//__________________________________________________________________________________		
+		
+		
+		close("*");
+	} // (MSPEC Exist)
+
+}//( File loop);
+
+if(isOpen("Log"))close("Log");
+print("Done");
+
+
+//Tables
+//__________________________________________________________________________________
+selectWindow("Progress Table");
+getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, second, msec);
+
+dhour = toString(hour);
+if(lengthOf(dhour)==1)dhour=toString(0)+toString(dhour);
+
+dminute = toString(minute);
+if(lengthOf(dminute)==1)dminute=toString(0)+toString(dminute);
+
+Table.set("Finish_Time",0,toString(dhour+":"+dminute));

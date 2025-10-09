@@ -1,0 +1,39 @@
+//run("Duplicate...", "title=Normalised");
+
+run("RGB Stack");
+
+
+greyVals = newArray(nSlices); // the array where we'll store the grey values, one for each image channel
+
+Dialog.create("Reflectance");
+
+	Dialog.addNumber("Reflectance", 90);
+
+Dialog.show();
+reflectance = Dialog.getNumber();
+
+
+
+//reflectance = 100; // the grey standard reflectance
+
+// Measure the grey standard (selected using an ROI - region of interest) in all image channels (slices)
+row = nResults();
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	label = getInfo("slice.label");
+	getStatistics(area, mean, min, max, std); // gets the statistics from the current ROI
+	setResult(label, row, mean);
+	greyVals[i]=mean; // saves the mean value measured, and stores it in the "greyVals" array's slot i.
+}
+
+// Any transforms we apply will only happen to the selected areas, so de-select the grey standard:
+run("Select None");
+
+// run through all the slices and apply the relevant normalisation transform:
+for(i=0; i<nSlices; i++){
+	setSlice(i+1);
+	scalingFactor = (reflectance/100)*255/greyVals[i]; // use the known reflectance to work out what transform is required
+	run("Multiply...", "value=&scalingFactor slice"); // apply the scaling factor to this channel only
+	// Normally anything between quotation marks is a string of text only, the ampersand symbol tells it to use the variable we've just created instead
+}
+run("RGB Color");

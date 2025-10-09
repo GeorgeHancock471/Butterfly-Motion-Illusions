@@ -1,0 +1,54 @@
+
+//------------------Combine Three Films-------------------------
+
+waitForUser("Select left image");
+left = getImageID();
+waitForUser("Select middle image");
+mid = getImageID();
+waitForUser("Select right image");
+right = getImageID();
+
+setBatchMode(true);
+
+
+selectImage(left);
+run("Select All");
+w = getWidth();
+h = getHeight();
+z = nSlices()-1;
+
+newImage("Combo", "RGB", w*3, h, z);
+selectImage(mid);
+run("Select All");
+selectImage(right);
+run("Select All");
+
+for(i=1; i<=z; i++){
+	selectImage(left);
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	setSlice(i);
+	makeRectangle(0,0,w,h);
+	run("Paste");
+
+	selectImage(mid);
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	makeRectangle(w,0,w,h);
+	run("Paste");
+
+	selectImage(right);
+	setSlice(i);
+	run("Copy");
+	selectImage("Combo");
+	makeRectangle(w*2,0,w,h);
+	run("Paste");
+
+}
+
+
+selectImage("Combo");
+setBatchMode("show");
+run("Select None");

@@ -1,0 +1,17 @@
+ID	Shape	Size	Pattern	Centre	minAngle	maxAngle	shader(a)	details(a)	bilateral?	
+Default_Circle	Circle	150	Animals	400	-180	180	0	0	no
+Default_Oval	Oval	150	Animals	400	-180	180	0	0	no
+Default_Triangle	Triangle	150	Targets	200	-40	40	0	0	no
+Default_Tear	Tear	150	Animals	400	-180	180	0	0	no
+Default_Egg	Egg	120	Eggs	200	-180	180	0.5	0.3	no
+Default_Moth	Moth	150	Animals	200	-40	40	1	1	yes
+Default_Grasshopper	Grasshopper	150	Animals	200	-180	180	1	1	yes
+Default_Newt	Newt	150	Animals	200	-180	180	1	1	yes
+Default_Toad	Toad	150	Animals	200	-180	180	1	1	yes
+Default_Crab	Crab	150	Animals	200	-180	180	1	1	yes
+Butterfly_Template	Wing_Monarch	150	Butterfly	200	-180	180	1	1	no
+BF_Papilio	BF_Papilio	150	Butterfly3	200	-180	180	0	1	no
+BF_Panthelea	BF_Panthelea	150	Butterfly3	200	-180	180	0	1	no
+BF_Pygrus	BF_Pygrus	150	Butterfly3	200	-180	180	0	1	no
+
+

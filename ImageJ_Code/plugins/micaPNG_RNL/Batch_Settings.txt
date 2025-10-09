@@ -1,0 +1,35 @@
+Single MSPEC Folder
+Moth Measure CIE XYZ 1931 D65 
+lw mw
+Human XYZ 0.05
+No
+8
+1000
+Rotate Wing ROIs
+None
+Yes
+Yes
+No
+No
+No
+No
+AllRois
+No
+No
+AllRois
+Yes
+Yes
+Gabor4
+AllRois
+4
+3
+1
+2
+6
+0
+SetScale
+10
+None
+Current
+0
+1

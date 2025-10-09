@@ -1,0 +1,388 @@
+/*
+
+Rendering is based on danaus free-flight take-off timing at 1000 fps
+Blender rending is up-sampled to 2000 fps in order to reduce motion blur
+
+two full wingbeats are modelled, each taking 78 frames (at 1000fps)
+
+Rendering is for the middle of this range, plus 10 frames at each end
+So rendering is from frame 29-127 (1000fps), 58-254 (2000fps)
+The analysis range shoudl therefore be 39-117 (1000fps)
+
+Next, the area of the wings is measured, and the wingbeat frequency
+estimated. The numbers above are then modified to slow or speed up
+the rendering FPS and measurement range.
+
+Render background set to average of bluetit sensitiivty, i.e. 76 out of 255.
+
+To add:
+	Scaling - to a uniform wing area
+
+
+*/
+
+
+
+//-------------------Variables--------------------
+dir = getDirectory("plugins") + "/Butterfly Dazzle/Temp/";
+bDir = "C:/Program Files/Blender Foundation/Blender 4.0/blender.exe"; //Blender directory
+
+iDir = getDirectory("Select directory containing targets");
+geneRemFileLoc = File.getDirectory(iDir);
+geneRemFileLoc += "/gene_RememberFit.txt";
+
+// work out generation number and output file
+gen = split(iDir, "_");
+gen = gen[gen.length-1];
+gen = replace(gen, "/", "");
+gen = "gen_" + gen + "_ranks.txt";
+gen = File.getDirectory(iDir) + gen;
+//print(gen);
+
+popP = File.getParent(iDir);
+
+popSet = popP+"/Settings_Population.txt";
+ps = File.openAsString(popSet);
+ps = split(ps,"\n");
+Array.print(ps);
+T = split(ps[0],"\t");
+T = T[1];
+
+if(endsWith(T,"Papilio")){
+// papilio - Papilio_machaon__Male 
+roiPath =  getDirectory("plugins") +"/1 CamoEvo/Targets/BF_Papilio/RoiSet.zip";
+freq = 11.01; 
+}
+
+if(endsWith(T,"Panthelea")){
+// Panthelea - Pseudochazara_anthelea__Male
+roiPath =  getDirectory("plugins") +"/1 CamoEvo/Targets/BF_Panthelea/RoiSet.zip";
+freq = 12.49; // 
+}
+
+if(endsWith(T,"Pygrus")){
+// Pygrus - Pyrgus_andromedae__Female
+roiPath =  getDirectory("plugins") +"/1 CamoEvo/Targets/BF_Pygrus/RoiSet.zip";
+freq = 14.8059;
+}
+
+
+
+tw = 1743; // wing image dimensions
+th = 2052;
+btw = 1000; // body target width
+
+//sG = 2; // spatial Gaussian blur sigma (low pass only)
+// NOTE for replicates papilio1 to 16 this value was set to 2 however, with some patterns this did not create fluid motion (strobe effects)
+// a value of 6 seems to remove strobe effects and still has good spatial resolution
+
+sG = 8; // spatial Gaussian blur sigma (low pass only)
+tG = 5; // temporal blur
+
+pxmm = 23.583; // measured using the same scanner as the butterfly book
+origStartFrame = 29;
+origStopFrame = 127;
+origFrameMultiplier = 2;
+
+setPasteMode("Copy");
+
+// Camera position
+posX = newArray(1);
+posY = newArray(1);
+posZ = newArray(1);
+posX[0] = 0;
+posY[0] = 6.44;
+posZ[0] = 34.43;
+
+rotX = newArray(1);
+rotY = newArray(1);
+rotZ = newArray(1);
+rotX[0] = 0;
+rotY[0] = 0;
+rotZ[0] = 0;
+
+posLabels = newArray(1);
+posLabels[0] = "dorsal";
+
+
+
+//----------------------------------------------------
+
+setBatchMode(true);
+
+//setBatchMode(false);
+
+while(roiManager("count") >0){
+	roiManager("select", 0);
+	roiManager("delete");
+}
+
+roiManager("Open", roiPath);
+
+print(roiPath);
+
+summaryTableExists = 0;
+morphoTableExists = 0;
+
+windowList = getList("window.titles");
+for(i=0; i<windowList.length; i++){
+	if(windowList[i] == "Summary Results")
+		summaryTableExists = 1;
+	//if(windowList[i] == "Morpho Results")
+	//	morphoTableExists = 1;
+}
+
+if(summaryTableExists == 0){
+	run("New... ", "name=[Summary Results] type=Table");
+	print("[Summary Results]", "\\Headings:Label\tleft_mean\tleft_min\tleft_max\tleft_sd\tright_mean\tright_min\tright_max\tright_sd\tup_mean\tup_min\tup_max\tup_sd\tdown_mean\tdown_min\tdown_max\tdown_sd\tUpDown_mean");
+}
+
+
+butterflyList = getFileList(iDir);
+Array.show(butterflyList);
+
+for(k=0; k<butterflyList.length; k++){
+
+print("\\Clear");
+
+print(butterflyList[k]);
+
+ts = iDir + butterflyList[k];
+open(ts);
+run("Select None");
+run("Flip Horizontally");
+
+
+//imageName = getTitle();
+imageName = butterflyList[k];
+imageName = replace(imageName, ".tif", "");
+
+cID = getImageID();
+
+//-----------select body--------
+// find right-most region of body
+roiManager("Select", 0);
+getSelectionBounds(fx, fy, fw, fh);
+getSelectionCoordinates(x, y);
+mx = x[x.length-1];
+if( x[x.length-2] > mx)
+	mx = x[x.length-2];
+
+roiManager("Select", 1);
+getSelectionBounds(hx, hy, hw, hh);
+getSelectionCoordinates(x, y);
+
+if( x[x.length-1] > mx)
+	mx = x[x.length-1];
+
+if( x[x.length-2] > mx)
+	mx = x[x.length-2];
+
+roiManager("Select", 2);
+getSelectionCoordinates(x, y);
+
+run("Select All");
+run("Duplicate...", "body");
+
+
+roiManager("Select", 0);
+run("Set...", "value=0 slice");
+roiManager("Select", 1);
+run("Set...", "value=0 slice");
+
+makeRectangle(x[0], fy, 5* (mx - x[0]), hy + hh - fy);
+run("Crop");
+
+
+run("Select All");
+run("Copy");
+run("Flip Horizontally");
+
+
+bw = getWidth() * 2;
+bh = getHeight();
+
+run("Canvas Size...", "width=&bw height=&bh position=Center-Left zero");
+makeRectangle(bw/2, 0, bw/2, bh);
+run("Paste");
+run("Select None");
+
+run("RGB Stack");
+setSlice(3);
+run("Select All");
+run("Copy");
+run("Add Slice");
+setSlice(4);
+run("Paste");
+//run("Invert", "slice");
+setMinAndMax(0, 2);
+run("Apply LUT", "slice");
+run("Minimum...", "radius=1 slice");
+
+run("Set Label...", "label=Alpha");
+
+
+scale = th/bh;
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&btw height=&th position=Center zero");
+
+
+
+
+
+ts = dir + "body.png";
+saveAs("PNG", ts);
+close();
+close();
+
+run("Select None");
+
+//------------select wings-------
+
+roiManager("Select", newArray(0,1));
+roiManager("Combine");
+getStatistics(wingArea, mean);
+
+startFrame = round(        origStartFrame * ((1000/freq)/78 ) * origFrameMultiplier   );
+stopFrame = round(        origStopFrame * ((1000/freq)/78 ) * origFrameMultiplier   );
+
+frameMultiplier = round(origFrameMultiplier*100*((1000/freq)/78));
+
+print("__________________________");
+print("Estimated wingbeat frequency (Hz) = " + freq);
+print("Start frame = " + startFrame);
+print("Stop frame = " + stopFrame);
+print("Speed multiplier, 100 frames = " + frameMultiplier);
+
+run("Crop");
+run("RGB Stack");
+
+setSlice(3);
+setBackgroundColor(0, 0, 0);
+run("Add Slice");
+setSlice(4);
+run("Set Label...", "label=Alpha");
+run("Set...", "value=255 slice");
+run("Minimum...", "radius=1 slice");
+
+w = getWidth();
+h = getHeight();
+
+scale = th/h;
+
+if(tw/w < th/h)
+	scale = tw/w;
+
+run("Scale...", "x=&scale y=&scale z=1.0 depth=4 interpolation=Bilinear average process create");
+run("Canvas Size...", "width=&tw height=&th position=Center-Left zero");
+run("Flip Horizontally", "stack");
+
+//waitForUser("waiting");
+
+
+ts = dir + "wing.png";
+saveAs("PNG", ts);
+close();
+close();
+
+row = nResults();
+
+
+//-----------------RENDER ORIGINAL----------------------
+
+// Create camera positions
+
+for(j=0; j<posX.length; j++){
+ts = dir + "butterflyRender.txt";
+
+rDir = dir + "render/";
+
+dataFile = File.open(ts);
+
+
+print(dataFile, "import bpy");
+
+print(dataFile, "bpy.data.objects['Camera'].location = (" + posX[j] + "," + posY[j] + "," + posZ[j] + ");");
+print(dataFile, "bpy.data.objects['Camera'].rotation_euler = (" + rotX[j] + "," + rotY[j] + "," + rotZ[j] + ");");
+print(dataFile, "bpy.context.scene.render.frame_map_new = "+ frameMultiplier + ";");
+print(dataFile, "bpy.context.scene.frame_start = " + startFrame + ";");
+print(dataFile, "bpy.context.scene.frame_end = " + stopFrame + ";");
+
+print(dataFile, "# Paths");
+print(dataFile, 'blend_file_path = "D:/Organised_Butterfly_Dazzle_George/BUTTER~1/plugins/Butterfly Dazzle/Temp/ButterflyRendering.blend"'+";");
+print(dataFile, 'output_path = "D:/Organised_Butterfly_Dazzle_George/BUTTER~1/plugins/Butterfly Dazzle/Temp/render/"'+";");
+
+print(dataFile, "# Load the new .blend file");
+print(dataFile, "bpy.ops.wm.open_mainfile(filepath=blend_file_path)");
+
+print(dataFile, "# Set the active view to the camera called 'DorsalCamera'");
+print(dataFile, "camera_name = 'Camera'");
+print(dataFile, "camera = bpy.data.cameras.get(camera_name)");
+
+print(dataFile, "# Set the output file path for rendering the animation");
+print(dataFile, "bpy.context.scene.render.filepath = output_path");
+
+print(dataFile, "# Render the animation directly to the specified output path");
+print(dataFile, "bpy.ops.render.render(animation=True, use_viewport=True)");
+
+print(dataFile, "bpy.ops.wm.quit_blender()");
+
+
+
+File.close(dataFile);
+
+tsPy = dir + "butterflyRender.py";
+if(File.delete(tsPy) == 0)
+	print("error deleting file: " + tsPy);
+if(File.rename(ts, tsPy) == 0)
+	print("error renaming file: " + tsPy);
+
+
+
+rList = getFileList(rDir);
+
+for(i=0; i<rList.length; i++){
+	ts = rDir + rList[i];
+	if(File.delete(ts) == 0)
+		print("error deleting file: " + ts);
+}
+
+
+ts = dir + "ButterflyRendering.blend";      //////// Butterfly 3D rig
+exec(bDir, "-b", ts, "-P", tsPy, "-a");
+
+
+run("Image Sequence...", "open=&rDir sort");
+run("Gaussian Blur 3D...", "x=0 y=0 z=1");
+run("Reduce...", "reduction=2");
+run("32-bit");
+run("Gaussian Blur 3D...", "x=&sG y=&sG z=&tG");
+
+oID = getImageID();
+run("Duplicate...", "duplicate range=10-88");
+dID = getImageID();
+
+selectImage(oID);
+close();
+
+selectImage(dID);
+
+
+ts = "label=[" + imageName + "] generemfileloc=[" + geneRemFileLoc + "] row=" + row;
+run("GA EMD", ts);
+
+run("Close All");
+}// j camera loop
+
+
+
+}//k
+
+// finished processing - create ranks file
+
+
+File.copy(geneRemFileLoc, gen);
+
+
+
+
