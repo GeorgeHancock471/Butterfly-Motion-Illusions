@@ -162,6 +162,8 @@ svg("Figure_1_FC_Violin.svg", width = 5, height = 5)
 p
 dev.off()
 
+nrow(df_emd)/4
+
 
 
 ### Sideways-Confusion Violin  (Main, Figure 1)   ----

@@ -206,6 +206,35 @@ dev.off()
 
 
 
+## Improvement in fitness plateus (supp) ----
+
+GAPdata
+nrow(GAPdata)
+GAPdata$Unique = with(GAPdata,paste(ID,SelectionPressure,Population))
+length(unique(GAPdata$Unique))/nrow(GAPdata)
+
+
+p <- ggplot(GAPdata, aes(x = Generation.x, y = Fitness, 
+                         col = SelectionPressure)) + 
+  stat_smooth(method = "glm",
+              formula = y ~ poly(x, 3),
+              aes(group = Population),
+              geom = "line",
+              alpha = 0.4) +
+  geom_smooth(method=glm, formula=y~poly(x,3)) + 
+  facet_wrap(~ SelectionPressure, scales = "free_y", ncol=4) +
+  scale_colour_manual(values = c("#CC79A7","orange","red","#56B4E9")) +
+  theme_light()
+
+p
+
+# Save SVG
+svg("Supp_Fitness_Plateus.svg", width = 8, height = 2) 
+p
+dev.off()
+
+
+
 # PREP DATA FOR RANDOM FOREST & PCA ------------
 
 ## Crop Collins Data----
@@ -365,12 +394,19 @@ df$Forwards_Energy = up_mean
 
 
 # PCA and Pairwise Comparisons ----
+df_pair = df
+
+nrow(df)
+
+d = subset(df,SelectionPressure=="Random-Selection")
+
+
+
 
 
 ## Create Groupings ----
 #...................................
 set.seed(111)
-
 
 
 df_pair$CreationMethod = ifelse(df_pair$SelectionPressure == "Nature", "Natural", "GA")
@@ -518,7 +554,7 @@ dev.off()
 
 ## Pairwise Difference ----
 #...................................
-data =bf_df_pair
+data = bf_df_pair
 
 pairwise_df_pair_Nat <- subset(data,Group_FC=="Nature") %>%
   dplyr::rename_with(~ paste0(.x, "_Nat"))

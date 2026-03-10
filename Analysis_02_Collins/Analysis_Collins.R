@@ -377,6 +377,27 @@ p
 dev.off()
 
 
+#Obtain outlier counts
+outlier_counts <- d %>%
+  group_by(flight_method, Pattern) %>%
+  summarise(
+    Q1 = quantile(Forwards_Confusion, 0.25, na.rm = TRUE),
+    Q3 = quantile(Forwards_Confusion, 0.75, na.rm = TRUE),
+    IQR = IQR(Forwards_Confusion, na.rm = TRUE),
+    lower_bound = Q1 - 1.5 * IQR,
+    upper_bound = Q3 + 1.5 * IQR,
+    n_outliers = sum(
+      Forwards_Confusion < lower_bound |
+        Forwards_Confusion > upper_bound,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+outlier_counts
+
+
+
 # No forwards-confusion when gliding
 # Patterning doesn't always improve confusion but on average it does
 d$morphoType
@@ -543,7 +564,7 @@ d$E_Ratios_b = scale(d$Sideways_Confusion)+scale(d$Forwards_Confusion)
 d$E_Ratios = d$E_Ratios/18
 
 #Exp 
-expV = 1.4
+expV = 1.6
 
 #Compute angle in radians and convert to degrees for phylogeny coordinates
 d$angle <- atan2(d$phy_y, d$phy_x) * 180 / pi
@@ -629,8 +650,7 @@ p = ggplot(d_ordered, aes(x = phy_x * 0.8, y = phy_y * 0.8)) +
   scale_fill_manual(values = FamilyPalette_Ring) +
   
   # Images
-  with_shadow( geom_image(data = subset(d_subset,angle<350), aes(x = phy_x, y = phy_y, image = imdDirS), size = 0.03),
-               sigma=2, color="lightgray",  x_offset = 1,  y_offset = 3) +   
+  geom_image(data = subset(d_subset,angle<350), aes(x = phy_x, y = phy_y, image = imdDirS), size = 0.03)+ 
   
   # Gray reference path at mean
   geom_path(data = d_ordered,
@@ -675,8 +695,7 @@ p = ggplot(d_ordered, aes(x = phy_x * 0.8, y = phy_y * 0.8)) +
                           barheight = 8            # Adjust the height of the gradient bar
                         )) + 
   #Binned
-  with_shadow( geom_image(data = subset(d_binned), aes(x = x*1.05, y = y*1.05, image = imdDirS), size = 0.03),
-               sigma=2, color="lightgray",  x_offset = 1,  y_offset = 3) +   
+  geom_image(data = subset(d_binned), aes(x = x*1.05, y = y*1.05, image = imdDirS), size = 0.03)+  
 
   
   labs(title = "",
@@ -695,11 +714,132 @@ dev.off()
 
 
 
+
+# REVISED BAR VERSION
+
+
+# Create radial bar coordinates directly from ordered data
+d_bars <- d_ordered %>%
+  mutate(
+    x_start = phy_x * expV,
+    y_start = phy_y * expV,
+    x_end   = phy_x * (E_Ratios + expV),
+    y_end   = phy_y * (E_Ratios + expV)
+  )
+
+# Render plot
+p = ggplot(d_ordered, aes(x = phy_x * 0.8, y = phy_y * 0.8)) +
+  
+  scale_fill_manual(values = FamilyPalette_Ring) +
+  
+  # Butterfly images
+  geom_image(data = subset(d_subset, angle < 350),
+             aes(x = phy_x*1.15, y = phy_y*1.15, image = imdDirS),
+             size = 0.03) +
+  
+  # Mean and SD reference paths
+  geom_path(aes(x = x_mean, y = y_mean),
+            linetype = 2,
+            linewidth = 0.5,
+            col = "black",
+            inherit.aes = FALSE) +
+  
+  geom_path(aes(x = x_mean_msd1, y = y_mean_msd1),
+            linetype = 2,
+            linewidth = 0.1,
+            col = "black",
+            inherit.aes = FALSE) +
+  
+  geom_path(aes(x = x_mean_psd1, y = y_mean_psd1),
+            linetype = 2,
+            linewidth = 0.2,
+            col = "black",
+            inherit.aes = FALSE) +
+  
+  geom_path(aes(x = x_mean_msd2, y = y_mean_msd2),
+            linetype = 2,
+            alpha = .5,
+            linewidth = 0.2,
+            col = "black",
+            inherit.aes = FALSE) +
+  
+  geom_path(aes(x = x_mean_psd2, y = y_mean_psd2),
+            linetype = 2,
+            alpha = .5,
+            linewidth = 0.1,
+            col = "black",
+            inherit.aes = FALSE) +
+  
+  # Radial bars (one per butterfly)
+  geom_segment(data = d_bars,
+               aes(x = x_start,
+                   y = y_start,
+                   xend = x_end,
+                   yend = y_end,
+                   color = E_Ratios_b),
+               linewidth = 0.85,
+               lineend = "butt",
+               inherit.aes = FALSE) +
+  
+  scale_color_viridis_c(
+    option = "D",
+    name = "Confusion",
+    guide = guide_colorbar(
+      title.position = "top",
+      title.hjust = 0.8,
+      barwidth = 1,
+      barheight = 8
+    )
+  ) +
+  
+  # Binned highlight images
+  geom_image(data = d_binned,
+             aes(x = x * 1.08, y = y * 1.08, image = imdDirS),
+             size = 0.03) +
+  
+  labs(
+    title = "",
+    x = "Sideways-Confusion",
+    y = "Forwards-Confusion",
+    fill = "Family"
+  ) +
+  
+  theme_void() +
+  coord_fixed()
+
+p
+
+install.packages("svglite")  # if not installed
+library(svglite)
+
+svglite("Fig_2_Radial_Butterflies_Bars.svg", width = 6, height = 6)
+print(p)
+dev.off()
+
+
+
+
+
 #REGRESSION PLOT (Figure 2) -----------------
 
 ## Plot ---- 
 
 d=subset(dataSet,render_method=="Patterned" & wing=="forewing" & flight_method=="Flapping")
+
+
+d$genusSpeciesSex = paste(d$genusSpecies,d$sex,sep="__")
+
+d2 = subset(d,genusSpeciesSex=="Brintesia_circe__Male" | 
+              genusSpeciesSex=="Gonepteryx_cleobule__Male" |
+              genusSpeciesSex=="Lycaena_tityrus__Female" |
+              genusSpeciesSex=="Papilio_alexanor__Female" |
+              genusSpeciesSex=="Pyrgus_sidae__Male" )
+
+nrow(d2)
+d2$Binomial
+d2$Forwards_Confusion
+d2$Sideways_Confusion
+d2$Forwards_Energy
 
 # Fit the model manually
 model <- glm(Forwards_Confusion ~ poly(Sideways_Confusion, 1), data = d)
@@ -727,7 +867,10 @@ p = ggplot(d, aes(x = Sideways_Confusion, y = Forwards_Confusion)) +
                           title.hjust = 0.5,       # Center the title
                           barwidth = 1,           # Adjust the width of the gradient bar
                           barheight = 8            # Adjust the height of the gradient bar
-                        )) +   
+                        )) +  
+  
+  geom_image(data = d2, aes(image = imdDirS), size = 0.05, col="cyan") +
+  geom_image(data = d2, aes(image = imdDirS), size = 0.04) +
   
   labs(title = "",
        x = "Sideways-Confusion",
@@ -744,6 +887,47 @@ svg("Fig_2_Regression.svg", width = 6, height = 6)
 p
 dev.off()
 
+library(svglite)
+
+svglite("Fig_2_Regression.svg", width = 6, height = 6)
+print(p)
+dev.off()
+
+
+
+
+# Plot with just isolated butterflies
+p = ggplot(d, aes(x = Sideways_Confusion, y = Forwards_Confusion)) + 
+  #Mean
+  geom_hline(aes(yintercept = mean(Forwards_Confusion)), linetype = 2,size=0.6) +
+  geom_vline(aes(xintercept = mean(Sideways_Confusion)), linetype = 2,size=0.6) +
+  
+  geom_point( size = 2, col="black", alpha=0.1) +
+  
+  # Regular Regression
+  geom_smooth(method=glm, formula=y~poly(x,1), alpha=0.0, size=1, col="blue", linetype=1) + 
+  
+  geom_image(data = d2, aes(image = imdDirS), size = 0.08, col="black") +
+  geom_image(data = d2, aes(image = imdDirS), size = 0.07) +
+  
+  labs(title = "",
+       x = "Sideways-Confusion",
+       y = "Forwards-Confusion",
+       color = "Sideways-Confusion") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(), 
+        panel.border = element_rect(colour = "grey", fill=NA)) + coord_fixed() +theme(legend.position = "none")
+
+p
+
+
+
+
+
+
+
+
 
 ## Correlation ---- 
 model <- lm(Forwards_Confusion ~ Sideways_Confusion , 
@@ -752,6 +936,15 @@ summary(model)
 hist(residuals(model))
 qqnorm(residuals(model))     # Plots the residuals against a normal distribution
 qqline(residuals(model))     # Adds a reference line for normality
+
+
+
+
+
+
+
+
+
 
 
 

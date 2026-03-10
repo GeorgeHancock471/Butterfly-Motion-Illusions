@@ -17,7 +17,7 @@ This README.md file was generated on 2025.10.07 [yyy,mm,dd] by George RA Hancock
 		Email: ghancockzoology@gmail.com		
 		
 
-3. Date of data collection.  2018 - 2025 
+3. Date of data collection.  2018 - 2026 
 
 4. Data collection location: 
 
@@ -25,6 +25,9 @@ This README.md file was generated on 2025.10.07 [yyy,mm,dd] by George RA Hancock
 		- France (Mareil-Marly, 78750)
 		
 	Butterfly EMD Measures
+		- University of Exeter, Penryn Campus (50.1710° N, 5.1238° W)
+		
+	Butterfly Behavioural Experiments
 		- University of Exeter, Penryn Campus (50.1710° N, 5.1238° W)
 
 5. Funding Body: Biotechnology and Biological Sciences Research Council (BBSRC), grant number 128145R001
@@ -45,6 +48,10 @@ This README.md file was generated on 2025.10.07 [yyy,mm,dd] by George RA Hancock
 # 2) DATA & FILE OVERVIEW
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 ## 1. File List (In Alphabetical order):	
+
+
+NOTE: to create the svg files you must run the R code first.
+
 
     **/Analysis_01_Takeoff/
 
@@ -171,9 +178,64 @@ This README.md file was generated on 2025.10.07 [yyy,mm,dd] by George RA Hancock
 	- The .svg files used for the supplementary figures in "Butterfly artificial evolution with genetic algorithms"
 
 	
+	**/Analysis_04_Game/
+
+	*/Blender_Environment/
+	- Contains the butterfly textures, background images and Blender files used to generate the flight paths and animations for the games.
+	- To create the flight paths, execute the python script in 'BF_Experiment_Generate_Flight_Paths.blend'
+	- To create all of the animations, excute the python script in 'BF_Experiment_Generate_Butterflies.blend'
+	- /Motion_Paths_Isolated/ contains the 10 .json files for the flight paths used in the experiment.
+	
+	*/figure_photos2/
+	- Contains the butterfly images from Collins Guide to Butterflies, used for the supp figures
+	
+	*/figure_photos3/
+	- Contains the butterfly renders in blender to scale for the largest wing beat.
+	
+	*/Game_Environment/
+	- Contains the Psychtoolbox and PECK functions and the scripts for the game.
+	- To run you must have Psychtoolbox setup with OpenGL and gsync.
+		o. once setup, use PECK Setup to enable PECK scripts
+		o. then run butterfly_game_v5, in the butterfly game folder.
+		
+	*/Results/
+	- Contains the raw results .csv files for each player.
+	*Analysis_Game.R
+	- Contains the R code required for "Figure 2 and the Supplementary Material Section 4/."
+
+	*Butterfly_Body_Lengths_px.xls
+	- Contains the calculation for the mean body lengths of the butterfly based on pixel lengths.
+	
+	*data_emd
+	- Contains the elementary motion detector (EMD) output for each butterfly for each flight path.	
+	
+	*data_flightPath
+	- Contains the coordinates and headings for the flight paths including unused measures of flight behaviour
+	
+	*data_hitbox
+	- Contains posthoc imageJ measures for the hitboxes for every frame.
+	
+	*data_emd
+	- Contains the elementary motion detector (EMD) output for each butterfly for each flight path.
+	
+	*data_triangle
+	- Contains emd measures for a white triangle following the same path as the butterflies.
+	
+	*Output Shape Stats
+	- Contains the elliptical shape statistics for three different percentails of the kernel density plot:
+		top 25%,  50% and 75% densist regions, i.e. 75% is a larger selection.
+	
+	
 	**/ImageJ_Code/
 	Contains the plugins required for ImageJ.
-	Blender model is located in plugins/Butterfly Dazzle/Temp/.
+	
+	Blender model is located in /plugins/Butterfly Dazzle/Temp/.
+	
+	A user accessible version of our EMD model is provided in /plugins/EMD_Model_User/
+		- Manual_Measure_EMD, for use when making motion maps and demos.
+		- Auto_Measure_EMD, for automated batch scripts
+	
+	
 	
 	
 	**/Phylogeny/
@@ -198,7 +260,6 @@ This README.md file was generated on 2025.10.07 [yyy,mm,dd] by George RA Hancock
 
 	*Generate_Circular_Phylogeny.R
 	- Contains the R code used to generate the butterfly x,y, and angle data from the .nwk file.
-
 
 
 ## 2. Relationship between files, if important: 
@@ -677,3 +738,194 @@ This README.md file was generated on 2025.10.07 [yyy,mm,dd] by George RA Hancock
 				R = random-selection
 				
 	[80] Repeat. The repeat number for the treatment.
+	
+	
+
+
+	**/Analysis_04_Game/
+	
+	*Butterfly_Body_Lengths_px.xls
+		
+	1. Number of variables: 8
+
+	2. Number of cases/rows: 5
+
+	3. Variable List: 
+
+	[1] Butterfly. The ID code for the 5 selected butterflies for the game.
+
+	[2] LengthRaw(px). The length of the butterfly's body for the blender output image.
+	
+	[3] LengthScreen(px). The length of the butterfly's body when on the screen, 1.5x RAW.
+
+	[4] ScreenWidth(px). The width of the screen in pixels.
+	
+	[5] ScreenWidth(cm). The width of the screen in cm.
+
+	[6] PxRatio. The ratio of pixels to cm.
+	
+	[7] Length(cm). The lengths of the butterfly in cm.
+	
+	[8] Mean. The mean length of the butterflies.
+	
+	
+	
+	*data_emd.csv
+		
+	1. Number of variables: 7
+
+	2. Number of cases/rows: 17500
+
+	3. Variable List: 
+
+	[1] butterfly. The butterfly phenotype used (Binomail + sex).
+	
+	[2] PathID. The unique path number [1-10].
+
+	[3] pathNumber. The unique path number [1-10].
+	
+	[4] EMD_Forward. The emd output for the forward direction (direction of start to end point).
+
+	[5] EMD_Backward. The emd ouutput for the backward direction (inverse of start to end point).
+	
+	[6] EMD_Left. The emd output for the left direction (-90 from start to end point  direction).
+
+	[7] EMD_Right. The emd output for the right direction (+90 from start to end point direction).
+	
+
+	*data_flightPath.csv
+	
+	1. Number of variables: 14
+
+	2. Number of cases/rows: 17500
+
+	3. Variable List: 
+
+	[1] frame. The frame number [1-350]
+	
+	[2] x. The blender x coordinate, values of 1 to -1 are within the range of the screen.
+
+	[3] y. The blender y coordinate, values of 1 to -1 are within the range of the screen.
+	
+	[4] heading_deg. The heading of the butterflies in degrees.
+	
+	[5] butterfly. The butterfly phenotype used (Binomail + sex).
+
+	[6] PathID. The unique path number [1-10].
+	
+	[7] pathNumber. The unique path number [1-10].
+
+	[8] meanHeading. The average heading of the butterfly.
+	
+	[9] heading_diff_from_mean. The difference in current heading from the mean.
+	
+	[10] rolling_mean_300ms. The mean heading from the past 300 milliseconds (72 frames).
+	
+	[11] rolling_sd_300ms. The standard deviation of headings from the past 300 milliseconds (72 frames).
+	
+	[12] heading_diff_300ms. The difference in heading from the heading 300 milliseconds ago (72 frames).
+	
+	[13] x_diff_300ms. The difference in x position from 300 milliseconds ago (72 frames).
+	
+	[14] y_diff_300ms. The difference in y position from 300 milliseconds ago (72 frames).
+
+	
+
+	
+	*data_hitbox.csv
+	
+	1. Number of variables: 14
+
+	2. Number of cases/rows: 17500
+
+	3. Variable List: 
+
+	[1] butterfly. The butterfly phenotype used (Binomail + sex).
+	
+	[2] pathNumber. The unique path number [1-10].
+
+	[3] hitbox_image. The .png for thje frame.
+	
+	[4] frame. The frame number [1-350]
+	
+	[5] hitbox_x. The x coordinate of the centre of the hitbox in px.
+	
+	[6] hitbox_y. The y coordinate of the centre of the hitbox in px.
+
+	[7] hitbox_w. The bounding width of the hitbox.
+	
+	[8] hitbox_h. The bounding height of the hitbox.
+
+	[9] hitbox_r. The radius of the hitbox.
+	
+	[10] hitbox_area. The area of the whole hitbox (not bounding box)
+	
+	[11] body_area. The area of the body region.
+	
+	[12] forewing_area. The area of the forewing region.
+	
+	[13] hindwing_area. The area of the hindwing region.
+	
+	[14] tail_area. The area of the tail region.
+	
+
+
+	*data_emd.csv
+		
+	1. Number of variables: 7
+
+	2. Number of cases/rows: 3500
+
+	3. Variable List: 
+	
+	[1] PathID. The unique path number [1-10].
+
+	[2] pathNumber. The unique path number [1-10].
+	
+	[3] TriangleEMD_Forward. The emd output for the forward direction (direction of start to end point).
+
+	[4] TriangleEMD_Backward. The emd ouutput for the backward direction (inverse of start to end point).
+	
+	[5] TriangleEMD_Left. The emd output for the left direction (-90 from start to end point  direction).
+
+	[6] TriangleEMD_Right. The emd output for the right direction (+90 from start to end point direction).
+	
+	
+	
+	*Output_Shape_Stats.csv
+		
+	1. Number of variables: 15
+
+	2. Number of cases/rows: 15
+
+	3. Variable List: 
+	
+	[1] Butterfly. The ID code for the 5 selected butterflies for the game.
+
+	[2] probability. The probability range, lower values indicate denser regions selected.
+	
+	[3] centroid_x. The x coordinate of the centre of the ellipse.
+
+	[4] centroid_y. The y coordinate of the centre of the ellipse.
+	
+	[5] major_axis. The widest diameter.
+
+	[6] minor_axis. The diameter perpendicular to the widest diameter.
+	
+	[7] aspect_ratio. Major/minor.
+	
+	[8] angle_deg. The angle of the ellipse in degrees.
+	
+	[9] area. The area of the ellipse.
+	
+	[10] xmin. The min x value of the ellipse.
+	
+	[11] xmax. The max x value of the ellipse.
+	
+	[12] ymin. The min y value of the ellipse.
+	
+	[13] ymax. The max y value of the ellipse.
+	
+	[14] width. The width of the ellipse (xMax-xMin).
+	
+	[15] height. The height of the llipse (yMax-yMin).
